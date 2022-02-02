@@ -119,6 +119,7 @@ func CreateClient(src, dst *Chain, srcUpdateHeader, dstUpdateHeader ibcexported.
 			}
 
 			createMsg, err := src.ChainProvider.CreateClient(clientState, dstUpdateHeader)
+			src.Log(fmt.Sprintf("Header Height %d", dstUpdateHeader.GetHeight()))
 			if err != nil {
 				return modified, fmt.Errorf("failed to compose CreateClient msg for chain{%s}. Err: %w \n", src.ChainID(), err)
 			}

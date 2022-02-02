@@ -25,6 +25,7 @@ RPCPORT=$4
 P2PPORT=$5
 PROFPORT=$6
 GRPCPORT=$7
+GRPCWPORT=$8
 
 if [ -z "$1" ]; then
   display_usage "[BINARY] ($BINARY|akash)"
@@ -54,6 +55,10 @@ if [ -z "$7" ]; then
   display_usage "[GRPC_PORT]"
 fi
 
+if [ -z "$8" ]; then
+  display_usage "[GRPCW_PORT]"
+fi
+
 echo "Creating $BINARY instance: home=$CHAINDIR | chain-id=$CHAINID | p2p=:$P2PPORT | rpc=:$RPCPORT | profiling=:$PROFPORT | grpc=:$GRPCPORT"
 
 # Add dir for chain, exit if error
@@ -66,19 +71,19 @@ fi
 coins="100000000000stake,100000000000samoleans"
 delegate="100000000000stake"
 
-redirect $BINARY --home $CHAINDIR/$CHAINID --chain-id $CHAINID init $CHAINID 
+redirect $BINARY --home $CHAINDIR/$CHAINID --chain-id $CHAINID init $CHAINID
 sleep 1
 $BINARY --home $CHAINDIR/$CHAINID keys add validator $KEYRING --output json > $CHAINDIR/$CHAINID/validator_seed.json 2>&1
 sleep 1
 $BINARY --home $CHAINDIR/$CHAINID keys add user $KEYRING --output json > $CHAINDIR/$CHAINID/key_seed.json 2>&1
 sleep 1
-redirect $BINARY --home $CHAINDIR/$CHAINID add-genesis-account $($BINARY --home $CHAINDIR/$CHAINID keys $KEYRING show user -a) $coins 
+redirect $BINARY --home $CHAINDIR/$CHAINID add-genesis-account $($BINARY --home $CHAINDIR/$CHAINID keys $KEYRING show user -a) $coins
 sleep 1
-redirect $BINARY --home $CHAINDIR/$CHAINID add-genesis-account $($BINARY --home $CHAINDIR/$CHAINID keys $KEYRING show validator -a) $coins 
+redirect $BINARY --home $CHAINDIR/$CHAINID add-genesis-account $($BINARY --home $CHAINDIR/$CHAINID keys $KEYRING show validator -a) $coins
 sleep 1
-redirect $BINARY --home $CHAINDIR/$CHAINID gentx validator $delegate $KEYRING --chain-id $CHAINID
+$BINARY --home $CHAINDIR/$CHAINID gentx validator $delegate $KEYRING --chain-id $CHAINID
 sleep 1
-redirect $BINARY --home $CHAINDIR/$CHAINID collect-gentxs 
+redirect $BINARY --home $CHAINDIR/$CHAINID collect-gentxs
 sleep 1
 
 # Check platform
@@ -107,6 +112,16 @@ else
   sed -i '' 's/index_all_keys = false/index_all_keys = true/g' $CHAINDIR/$CHAINID/config/config.toml
   # sed -i '' 's#index-events = \[\]#index-events = \["message.action","send_packet.packet_src_channel","send_packet.packet_sequence"\]#g' $CHAINDIR/$CHAINID/config/app.toml
 fi
+
+echo "Change settings in app.toml file..."
+if [ $platform = 'linux' ]; then
+  sed -i 's/minimum-gas-prices = ""/minimum-gas-prices = "0.025stake"/g' $CHAINDIR/$CHAINID/config/app.toml
+  sed -i 's/address = "0.0.0.0:9090"/address = "0.0.0.0:'$GRPCPORT'"/g' $CHAINDIR/$CHAINID/config/app.toml
+  sed -i 's/address = "0.0.0.0:9091"/address = "0.0.0.0:'$GRPCWPORT'"/g' $CHAINDIR/$CHAINID/config/app.toml
+else
+  sed -i '' 's/minimum-gas-prices = ""/minimum-gas-prices = "0.025stake"/g' $CHAINDIR/$CHAINID/config/app.toml
+fi
+
 
 # Start the gaia
 $BINARY --home $CHAINDIR/$CHAINID start --pruning=nothing --grpc-web.enable=false --grpc.address="0.0.0.0:$GRPCPORT" > $CHAINDIR/$CHAINID.log 2>&1 &

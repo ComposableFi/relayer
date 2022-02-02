@@ -1,0 +1,11 @@
+#!/bin/bash
+
+SCRIPTDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+SOMMDIR="$(dirname $SCRIPTDIR)/chain-code/sommelier"
+
+[ ! -d "$SOMMDIR" ] && echo "Repository for sommelier does not exist at $SOMMDIR. Try running 'make get-somm'..." && exit 1
+
+cd $SOMMDIR
+echo "Building sommelier binary at branch($(git branch --show-current)) tag($(git describe --tags)) commit($(git rev-parse HEAD))"
+make install &> /dev/null
+sommelier version --long
