@@ -3,6 +3,7 @@ package substrate
 import (
 	clienttypes "github.com/cosmos/ibc-go/v2/modules/core/02-client/types"
 	"github.com/cosmos/relayer/relayer/provider"
+	"github.com/cosmos/relayer/relayer/provider/substrate/keystore"
 )
 
 var (
@@ -13,6 +14,7 @@ var (
 )
 
 type SubstrateProvider struct {
+	Keybase keystore.Keyring
 	// TODO: add properties here that are needed to implement interface definition
 }
 
