@@ -1,43 +1,61 @@
 package keystore
 
 import (
+	"bufio"
 	"fmt"
+	"io"
+	"io/ioutil"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
 	"github.com/99designs/keyring"
+	"github.com/cosmos/cosmos-sdk/client/input"
 	"github.com/pkg/errors"
 	"github.com/vedhavyas/go-subkey"
 	"github.com/vedhavyas/go-subkey/sr25519"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // Backend options for Keyring
 const (
 	BackendMemory = "memory"
+	BackendFile   = "file"
 
 	infoSuffix = "info"
 )
 
+const (
+	keyringFileDirName = "keyring-file"
+)
+
+const (
+	maxPassphraseEntryAttempts = 3
+)
+
 func New(
-	appName, backend string,
+	appName, backend string, rootDir string, userInput io.Reader,
 ) (Keyring, error) {
 	var (
-		// db  keyring.Keyring
+		db  keyring.Keyring
 		err error
 	)
 
 	switch backend {
 	case BackendMemory:
 		return NewInMemory(), err
+	case BackendFile:
+		db, err = keyring.Open(newFileBackendKeyringConfig(appName, rootDir, userInput))
 	default:
-		return nil, fmt.Errorf("unknown keyring backend %v", backend)
+		return nil, fmt.Errorf(ErrTextUnknownKeyringBackend, backend)
 	}
 
-	// if err != nil {
-	// 	return nil, err
-	// }
+	if err != nil {
+		return nil, err
+	}
 
-	// return newKeystore(db), nil
+	return newKeystore(db), nil
 }
 
 // NewInMemory creates a transient keyring useful for testing
@@ -47,6 +65,100 @@ func NewInMemory() Keyring {
 	return newKeystore(keyring.NewArrayKeyring(nil))
 }
 
+func newFileBackendKeyringConfig(name, dir string, buf io.Reader) keyring.Config {
+	fileDir := filepath.Join(dir, keyringFileDirName)
+
+	return keyring.Config{
+		AllowedBackends:  []keyring.BackendType{keyring.FileBackend},
+		ServiceName:      name,
+		FileDir:          fileDir,
+		FilePasswordFunc: newRealPrompt(fileDir, buf),
+	}
+}
+
+func newRealPrompt(dir string, buf io.Reader) func(string) (string, error) {
+	return func(prompt string) (string, error) {
+		keyhashStored := false
+		keyhashFilePath := filepath.Join(dir, "keyhash")
+
+		var keyhash []byte
+
+		_, err := os.Stat(keyhashFilePath)
+
+		switch {
+		case err == nil:
+			keyhash, err = ioutil.ReadFile(keyhashFilePath)
+			if err != nil {
+				return "", fmt.Errorf(ErrTextFailedToRead, keyhashFilePath, err)
+			}
+
+			keyhashStored = true
+
+		case os.IsNotExist(err):
+			keyhashStored = false
+
+		default:
+			return "", fmt.Errorf(ErrTextFailedToOpen, keyhashFilePath, err)
+		}
+
+		failureCounter := 0
+
+		for {
+			failureCounter++
+			if failureCounter > maxPassphraseEntryAttempts {
+				return "", fmt.Errorf(ErrTextTooManyWrongPassphrases)
+			}
+
+			buf := bufio.NewReader(buf)
+			pass, err := input.GetPassword("Enter keyring passphrase:", buf)
+			if err != nil {
+				// NOTE: LGTM.io reports a false positive alert that states we are printing the password,
+				// but we only log the error.
+				//
+				// lgtm [go/clear-text-logging]
+				fmt.Fprintln(os.Stderr, err)
+				continue
+			}
+
+			if keyhashStored {
+				if err := bcrypt.CompareHashAndPassword(keyhash, []byte(pass)); err != nil {
+					fmt.Fprintln(os.Stderr, ErrTextIncorrectPassphrase)
+					continue
+				}
+
+				return pass, nil
+			}
+
+			reEnteredPass, err := input.GetPassword("Re-enter keyring passphrase:", buf)
+			if err != nil {
+				// NOTE: LGTM.io reports a false positive alert that states we are printing the password,
+				// but we only log the error.
+				//
+				// lgtm [go/clear-text-logging]
+				fmt.Fprintln(os.Stderr, err)
+				continue
+			}
+
+			if pass != reEnteredPass {
+				fmt.Fprintln(os.Stderr, ErrTextPassphraseDoNotMatch)
+				continue
+			}
+
+			passwordHash, err := bcrypt.GenerateFromPassword([]byte(pass), 2)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				continue
+			}
+
+			if err := ioutil.WriteFile(dir+"/keyhash", passwordHash, 0555); err != nil {
+				return "", err
+			}
+
+			return pass, nil
+		}
+	}
+}
+
 func newKeystore(kr keyring.Keyring) keystore {
 	return keystore{kr}
 }
@@ -54,10 +166,10 @@ func newKeystore(kr keyring.Keyring) keystore {
 func (ks keystore) key(infoKey string) (Info, error) {
 	bs, err := ks.db.Get(infoKey)
 	if err != nil {
-		return nil, errors.Errorf(ErrKeyNotFound, infoKey)
+		return nil, errors.Errorf(ErrTextKeyNotFound, infoKey)
 	}
 	if len(bs.Data) == 0 {
-		return nil, errors.Errorf(ErrKeyNotFound, infoKey)
+		return nil, errors.Errorf(ErrTextKeyNotFound, infoKey)
 	}
 	return unmarshalInfo(bs.Data)
 }
@@ -99,7 +211,7 @@ func (ks keystore) List() ([]Info, error) {
 			}
 
 			if len(rawInfo.Data) == 0 {
-				return nil, errors.Errorf(ErrKeyNotFound, key)
+				return nil, errors.Errorf(ErrTextKeyNotFound, key)
 			}
 
 			info, err := unmarshalInfo(rawInfo.Data)
@@ -132,7 +244,7 @@ func (ks keystore) NewAccount(name string, mnemonic string, network uint8) (Info
 		return nil, err
 	}
 	if _, err := ks.KeyByAddress(address); err == nil {
-		return nil, fmt.Errorf("account with address %s already exists in keyring, delete the key first if you want to recreate it", address)
+		return nil, fmt.Errorf(ErrTextAddressExists, address)
 	}
 
 	return ks.writeLocalKey(name, keyPair, address)
@@ -159,7 +271,7 @@ func (ks keystore) writeInfo(info Info) error {
 		return err
 	}
 	if exists {
-		return errors.New("public key already exists in keybase")
+		return errors.New(ErrTextPubkeyExists)
 	}
 
 	err = ks.db.Set(keyring.Item{
@@ -203,11 +315,11 @@ func (ks keystore) existsInDb(info Info) (bool, error) {
 func (ks keystore) KeyByAddress(address string) (Info, error) {
 	ik, err := ks.db.Get(address)
 	if err != nil {
-		return nil, errors.Errorf(ErrKeyWithAddressNotFound, address)
+		return nil, errors.Errorf(ErrTextKeyWithAddressNotFound, address)
 	}
 
 	if len(ik.Data) == 0 {
-		return nil, errors.Errorf(ErrKeyWithAddressNotFound, address)
+		return nil, errors.Errorf(ErrTextKeyWithAddressNotFound, address)
 	}
 	return ks.key(string(ik.Data))
 }

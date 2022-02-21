@@ -1,6 +1,8 @@
 package substrate
 
 import (
+	"io"
+
 	clienttypes "github.com/cosmos/ibc-go/v2/modules/core/02-client/types"
 	"github.com/cosmos/relayer/relayer/provider"
 	"github.com/cosmos/relayer/relayer/provider/substrate/keystore"
@@ -13,8 +15,16 @@ var (
 	_ provider.RelayerMessage = (*SubstrateRelayerMessage)(nil)
 )
 
+type ChainClientConfig struct {
+	ChainID        string `json:"chain-id" yaml:"chain-id"`
+	KeyringBackend string `json:"keyring-backend" yaml:"keyring-backend"`
+	KeyDirectory   string `json:"key-directory" yaml:"key-directory"`
+}
+
 type SubstrateProvider struct {
+	Config  *ChainClientConfig
 	Keybase keystore.Keyring
+	Input   io.Reader
 	// TODO: add properties here that are needed to implement interface definition
 }
 

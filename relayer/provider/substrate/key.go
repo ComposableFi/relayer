@@ -7,7 +7,7 @@ import (
 )
 
 func (sp *SubstrateProvider) CreateKeystore(path string) error {
-	keybase, err := keystore.New(sp.Config.ChainID, sp.Config.KeyringBackend)
+	keybase, err := keystore.New(sp.Config.ChainID, sp.Config.KeyringBackend, sp.Config.KeyDirectory, sp.Input)
 	if err != nil {
 		return err
 	}
