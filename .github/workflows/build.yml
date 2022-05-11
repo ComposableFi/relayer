@@ -36,16 +36,22 @@ jobs:
             ${{ runner.os }}-go-
 
       # setup substrate node
-      - name: install rust and setup substrate node
+      - name: install rust
         run: |
           curl https://sh.rustup.rs -sSf | sh
           source ~/.cargo/env
+      - name: update rust version
+        run: |
           rustup default stable && rustup update
           rustup update nightly && rustup target add wasm32-unknown-unknown --toolchain nightly
-          git clone https://github.com/substrate-developer-hub/substrate-node-template
+      - name: clone substrate node template
+        run: git clone https://github.com/substrate-developer-hub/substrate-node-template
+      - name: build substrate node template
+        run: |
           cd substrate-node-template && git checkout latest
           cargo build --release
-          ./target/release/node-template --dev
+      - name: start substrate node
+        run:  ./target/release/node-template --dev
 
       # unit tests
       - name: run unit tests
