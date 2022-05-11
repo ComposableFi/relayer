@@ -627,55 +627,55 @@ func (sp *SubstrateProvider) MsgUpgradeClient(srcClientId string, consRes *clien
 
 func (sp *SubstrateProvider) RelayPacketFromSequence(ctx context.Context, src, dst provider.ChainProvider, srch, dsth, seq uint64, dstChanId, dstPortId, dstClientId string, srcChanId, srcPortId, srcClientId string) (provider.RelayerMessage, provider.RelayerMessage, error) {
 
-	allPackets, err := sp.RPCClient.RPC.IBC.QueryPackets(srcClientId, dstPortId, []uint64{seq})
-	switch {
-	case err != nil:
-		return nil, nil, err
-	case len(allPackets) == 0:
-		return nil, nil, fmt.Errorf("no transactions returned with query")
-	case len(allPackets) > 1:
-		return nil, nil, fmt.Errorf("more than one transaction returned with query")
-	}
-
-	rcvPackets, timeoutPackets, err := relayPacketsFromPacket(ctx, src, dst, int64(dsth), allPackets, dstChanId, dstPortId, srcChanId, srcPortId, srcClientId)
-	switch {
-	case err != nil:
-		return nil, nil, err
-	case len(rcvPackets) == 0 && len(timeoutPackets) == 0:
-		return nil, nil, fmt.Errorf("no relay msgs created from query response")
-	case len(rcvPackets)+len(timeoutPackets) > 1:
-		return nil, nil, fmt.Errorf("more than one relay msg found in tx query")
-	}
-
-	if err != nil {
-		return nil, nil, err
-	}
-	if len(rcvPackets) == 1 {
-		pkt := rcvPackets[0]
-		if seq != pkt.Seq() {
-			return nil, nil, fmt.Errorf("wrong sequence: expected(%d) got(%d)", seq, pkt.Seq())
-		}
-
-		packet, err := dst.MsgRelayRecvPacket(ctx, src, int64(srch), pkt, srcChanId, srcPortId, dstChanId, dstPortId)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		return packet, nil, nil
-	}
-
-	if len(timeoutPackets) == 1 {
-		pkt := timeoutPackets[0]
-		if seq != pkt.Seq() {
-			return nil, nil, fmt.Errorf("wrong sequence: expected(%d) got(%d)", seq, pkt.Seq())
-		}
-
-		timeout, err := src.MsgRelayTimeout(ctx, dst, int64(dsth), pkt, dstChanId, dstPortId, srcChanId, srcPortId)
-		if err != nil {
-			return nil, nil, err
-		}
-		return nil, timeout, nil
-	}
+	//allPackets, err := sp.RPCClient.RPC.IBC.QueryPackets(srcClientId, dstPortId, []uint64{seq})
+	//switch {
+	//case err != nil:
+	//	return nil, nil, err
+	//case len(allPackets) == 0:
+	//	return nil, nil, fmt.Errorf("no transactions returned with query")
+	//case len(allPackets) > 1:
+	//	return nil, nil, fmt.Errorf("more than one transaction returned with query")
+	//}
+	//
+	//rcvPackets, timeoutPackets, err := relayPacketsFromPacket(ctx, src, dst, int64(dsth), allPackets, dstChanId, dstPortId, srcChanId, srcPortId, srcClientId)
+	//switch {
+	//case err != nil:
+	//	return nil, nil, err
+	//case len(rcvPackets) == 0 && len(timeoutPackets) == 0:
+	//	return nil, nil, fmt.Errorf("no relay msgs created from query response")
+	//case len(rcvPackets)+len(timeoutPackets) > 1:
+	//	return nil, nil, fmt.Errorf("more than one relay msg found in tx query")
+	//}
+	//
+	//if err != nil {
+	//	return nil, nil, err
+	//}
+	//if len(rcvPackets) == 1 {
+	//	pkt := rcvPackets[0]
+	//	if seq != pkt.Seq() {
+	//		return nil, nil, fmt.Errorf("wrong sequence: expected(%d) got(%d)", seq, pkt.Seq())
+	//	}
+	//
+	//	packet, err := dst.MsgRelayRecvPacket(ctx, src, int64(srch), pkt, srcChanId, srcPortId, dstChanId, dstPortId)
+	//	if err != nil {
+	//		return nil, nil, err
+	//	}
+	//
+	//	return packet, nil, nil
+	//}
+	//
+	//if len(timeoutPackets) == 1 {
+	//	pkt := timeoutPackets[0]
+	//	if seq != pkt.Seq() {
+	//		return nil, nil, fmt.Errorf("wrong sequence: expected(%d) got(%d)", seq, pkt.Seq())
+	//	}
+	//
+	//	timeout, err := src.MsgRelayTimeout(ctx, dst, int64(dsth), pkt, dstChanId, dstPortId, srcChanId, srcPortId)
+	//	if err != nil {
+	//		return nil, nil, err
+	//	}
+	//	return nil, timeout, nil
+	//}
 
 	return nil, nil, fmt.Errorf("should have errored before here")
 }
