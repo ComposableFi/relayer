@@ -159,6 +159,7 @@ func signedCommitment(conn *rpcclient.SubstrateAPI, blockHash rpcclientTypes.Has
 		return rpcclientTypes.SignedCommitment{}, err
 	}
 
+	fmt.Printf("justfications %v \n", signedBlock.Justifications)
 	for _, v := range signedBlock.Justifications {
 		// not every relay chain block has a beefy justification
 		if bytes.Equal(v.ConsensusEngineId[:], []byte("BEEF")) {
