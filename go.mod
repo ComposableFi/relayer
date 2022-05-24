@@ -164,8 +164,7 @@ require (
 
 replace github.com/cosmos/ibc-go/v3 => ../../ComposableFi/ibc-go
 
-// replace github.com/ComposableFi/go-substrate-rpc-client/v4 => ../../ComposableFi/go-substrate-rpc-client
-replace github.com/ComposableFi/go-substrate-rpc-client/v4 => github.com/ComposableFi/go-substrate-rpc-client/v4 v4.0.1-0.20220520095549-28b7c5a4e212
+replace github.com/ComposableFi/go-substrate-rpc-client/v4 => ../../ComposableFi/go-substrate-rpc-client
 
 replace github.com/keybase/go-keychain => github.com/99designs/go-keychain v0.0.0-20191008050251-8e49817e8af4
 
