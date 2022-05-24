@@ -159,7 +159,7 @@ func signedCommitment(conn *rpcclient.SubstrateAPI, blockHash rpcclientTypes.Has
 	}
 
 	compactCommitment := &rpcclientTypes.CompactSignedCommitment{}
-	err = rpcclientTypes.DecodeFromHexString(string(signedBlock.Justification), compactCommitment)
+	err = rpcclientTypes.DecodeFromHexString(string(signedBlock.Justifications[0].EncodedJustification), compactCommitment)
 	if err != nil {
 		return rpcclientTypes.SignedCommitment{}, err
 	}
@@ -280,7 +280,12 @@ func constructParachainHeaders(
 	var paraHeads = make([][]byte, len(mmrBatchProof.Leaves))
 
 	for i := 0; i < len(mmrBatchProof.Leaves); i++ {
-		v := mmrBatchProof.Leaves[i]
+		type LeafWithIndex struct {
+			Leaf  rpcclientTypes.MmrLeaf
+			Index uint64
+		}
+
+		v := LeafWithIndex{Leaf: mmrBatchProof.Leaves[i], Index: uint64(mmrBatchProof.Proof.LeafIndex[i])}
 		paraHeads[i] = v.Leaf.ParachainHeads[:]
 		var leafBlockNumber = cs.GetBlockNumberForLeaf(uint32(v.Index))
 		paraHeaders := finalizedBlocks[leafBlockNumber]
