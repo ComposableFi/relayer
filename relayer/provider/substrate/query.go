@@ -40,6 +40,10 @@ func (sp *SubstrateProvider) QueryLatestHeight(ctx context.Context) (int64, erro
 	return int64(signedBlock.Block.Header.Number), nil
 }
 
+// inorder to do this, we need to know the last finalized block by beefy that is < this height.
+// this is because we need to fetch all the newly finalized parachain headers at this new height.
+// also we'd need to query the parachain so we know at what specific heights new ibc events have been emitted
+// when is this function called in the relayer lifecycle? and under what conditions?
 func (sp *SubstrateProvider) QueryHeaderAtHeight(ctx context.Context, height int64) (ibcexported.ClientMessage, error) {
 	//latestBlockHash, err := sp.RPCClient.RPC.Chain.GetBlockHashLatest()
 	//if err != nil {
