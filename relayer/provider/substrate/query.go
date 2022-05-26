@@ -31,6 +31,8 @@ func (cc *SubstrateProvider) QueryTxs(ctx context.Context, page, limit int, even
 	return nil, nil
 }
 
+
+// who calls this? why is it called? what is this height used for?
 func (sp *SubstrateProvider) QueryLatestHeight(ctx context.Context) (int64, error) {
 	signedBlock, err := sp.RPCClient.RPC.Chain.GetBlockLatest()
 	if err != nil {
@@ -195,6 +197,7 @@ func (sp *SubstrateProvider) QueryClients(ctx context.Context) (clienttypes.Iden
 	return res, nil
 }
 
+// what the hell does this do?
 func (sp *SubstrateProvider) AutoUpdateClient(ctx context.Context, dst provider.ChainProvider, _ time.Duration, srcClientId, dstClientId string) (time.Duration, error) {
 	srch, err := sp.QueryLatestHeight(ctx)
 	if err != nil {
@@ -205,6 +208,7 @@ func (sp *SubstrateProvider) AutoUpdateClient(ctx context.Context, dst provider.
 		return 0, err
 	}
 
+	// this is misnamed? wtf
 	clientState, err := sp.queryTMClientState(ctx, srch, srcClientId)
 	if err != nil {
 		return 0, err
@@ -266,6 +270,8 @@ func maxDuration() time.Duration {
 	return 1<<63 - 1
 }
 
+
+// why does this method exist?
 func (sp *SubstrateProvider) FindMatchingClient(ctx context.Context, counterparty provider.ChainProvider, clientState ibcexported.ClientState) (string, bool) {
 	clientsResp, err := sp.QueryClients(ctx)
 	if err != nil {
