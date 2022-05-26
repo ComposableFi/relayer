@@ -48,6 +48,7 @@ func (sp *SubstrateProvider) QueryHeaderAtHeight(ctx context.Context, height int
 
 	blockHash, err := sp.RPCClient.RPC.Chain.GetBlockHash(uint64(height))
 	if err != nil {
+		fmt.Printf("get block hash error %v", err)
 		return nil, err
 	}
 

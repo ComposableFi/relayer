@@ -2,7 +2,6 @@ package substrate_test
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
 	"github.com/cosmos/relayer/v2/relayer/provider/substrate"
@@ -34,32 +33,19 @@ func TestQueryLatestHeight(t *testing.T) {
 }
 
 func TestQueryHeaderAtHeight(t *testing.T) {
-	beefyFinalizedBlockHash, err := provider.RPCClient.RPC.Chain.GetBeefyFinalizedHead()
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
 	finalizedBlockHash, err := provider.RPCClient.RPC.Chain.GetFinalizedHead()
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
-	beefyFinalizedHeader, err := provider.RPCClient.RPC.Chain.GetHeader(beefyFinalizedBlockHash)
+	_, err = provider.RPCClient.RPC.Chain.GetHeader(finalizedBlockHash)
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
-	finalizedHeader, err := provider.RPCClient.RPC.Chain.GetHeader(finalizedBlockHash)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	fmt.Printf("finalized height %v  beefy finalizedHeader %v \n", finalizedHeader.Number, beefyFinalizedHeader.Number)
-	_, err = provider.QueryHeaderAtHeight(nil, int64(beefyFinalizedHeader.Number))
+	_, err = provider.QueryHeaderAtHeight(nil, int64(461))
 	if err != nil {
 		t.Error(err)
 		return

@@ -159,17 +159,17 @@ func signedCommitment(conn *rpcclient.SubstrateAPI, blockHash rpcclientTypes.Has
 		return rpcclientTypes.SignedCommitment{}, err
 	}
 
-	fmt.Printf("justfications %v \n", signedBlock.Justifications)
+	fmt.Printf("justifications %v", signedBlock.Justifications)
 	for _, v := range signedBlock.Justifications {
 		// not every relay chain block has a beefy justification
-		if bytes.Equal(v.ConsensusEngineId[:], []byte("BEEF")) {
-			compactCommitment := &rpcclientTypes.CompactSignedCommitment{}
-
-			err = rpcclientTypes.DecodeFromBytes(v.EncodedJustification, compactCommitment)
+		if bytes.Equal(v.ConsensusEngineID[:], []byte("BEEF")) {
+			fmt.Printf("checking for beef!!! \n")
+			vfp := &rpcclientTypes.VersionedFinalityProof{}
+			err = rpcclientTypes.DecodeFromBytes(v.EncodedJustification, vfp)
 			if err != nil {
 				return rpcclientTypes.SignedCommitment{}, err
 			}
-			return compactCommitment.Unpack(), nil
+			return vfp.AsCompactSignedCommitment.Unpack(), nil
 		}
 	}
 
@@ -186,19 +186,22 @@ func getFinalizedBlocks(
 	blockHash rpcclientTypes.Hash,
 ) (map[uint32]map[uint32][]byte, []uint64, error) {
 
-	previousFinalizedHash, err := conn.RPC.Chain.GetBlockHash(uint64(cs.LatestBeefyHeight + 1))
+	previousFinalizedHash, err := conn.RPC.Chain.GetBlockHash(uint64(cs.LatestBeefyHeight - 1))
 	if err != nil {
+		fmt.Printf("get block hash \n")
 		return nil, nil, err
 	}
 
 	var paraHeaderKeys []rpcclientTypes.StorageKey
 	paraHeaderKeys, err = parachainHeaderKeys(conn, blockHash)
 	if err != nil {
+		fmt.Printf("header keys \n")
 		return nil, nil, err
 	}
 
 	changeSet, err := conn.RPC.State.QueryStorage(paraHeaderKeys, previousFinalizedHash, blockHash)
 	if err != nil {
+		fmt.Printf("query storage\n")
 		return nil, nil, err
 	}
 
@@ -275,12 +278,14 @@ func constructParachainHeaders(
 	var leafIndeces []uint64
 	finalizedBlocks, leafIndeces, err := getFinalizedBlocks(conn, cs, blockHash)
 	if err != nil {
+		fmt.Printf("finalized block error\n")
 		return nil, err
 	}
 
 	// fetch mmr proofs for leaves containing our target paraId
 	mmrBatchProof, err := conn.RPC.MMR.GenerateBatchProof(leafIndeces, blockHash)
 	if err != nil {
+		fmt.Printf("generate batch proof error\n")
 		return nil, err
 	}
 
@@ -490,6 +495,7 @@ func constructBeefyHeader(conn *rpcclient.SubstrateAPI, blockHash rpcclientTypes
 
 	batchProofs, err := mmrBatchProofs(conn, blockHash, commitment)
 	if err != nil {
+		fmt.Printf("batch proofs error\n")
 		return nil, err
 	}
 
