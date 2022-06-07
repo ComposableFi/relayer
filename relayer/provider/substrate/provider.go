@@ -18,7 +18,6 @@ import (
 	chantypes "github.com/cosmos/ibc-go/v3/modules/core/04-channel/types"
 	ibcexported "github.com/cosmos/ibc-go/v3/modules/core/exported"
 	beefyclient "github.com/cosmos/ibc-go/v3/modules/light-clients/11-beefy/types"
-	beefyclientTypes "github.com/cosmos/ibc-go/v3/modules/light-clients/11-beefy/types"
 	"github.com/cosmos/relayer/v2/relayer/provider"
 	"github.com/cosmos/relayer/v2/relayer/provider/substrate/keystore"
 )
@@ -84,10 +83,10 @@ func (sp *SubstrateProvider) QueryConsensusStateABCI(clientID string, height ibc
 
 // queryTMClientState retrieves the latest consensus state for a client in state at a given height
 // and unpacks/cast it to tendermint clientstate
-func (sp *SubstrateProvider) queryTMClientState(ctx context.Context, srch int64, srcClientId string) (*beefyclientTypes.ClientState, error) {
+func (sp *SubstrateProvider) queryTMClientState(ctx context.Context, srch int64, srcClientId string) (*beefyclient.ClientState, error) {
 	clientStateRes, err := sp.QueryClientStateResponse(ctx, srch, srcClientId)
 	if err != nil {
-		return &beefyclientTypes.ClientState{}, err
+		return &beefyclient.ClientState{}, err
 	}
 
 	return castClientStateToBeefyType(clientStateRes.ClientState)
@@ -213,13 +212,13 @@ func (srm SubstrateRelayerMessage) MsgBytes() ([]byte, error) {
 func castClientStateToBeefyType(cs *codectypes.Any) (*beefyclient.ClientState, error) {
 	clientStateExported, err := clienttypes.UnpackClientState(cs)
 	if err != nil {
-		return &beefyclientTypes.ClientState{}, err
+		return &beefyclient.ClientState{}, err
 	}
 
 	// cast from interface to concrete type
-	clientState, ok := clientStateExported.(*beefyclientTypes.ClientState)
+	clientState, ok := clientStateExported.(*beefyclient.ClientState)
 	if !ok {
-		return &beefyclientTypes.ClientState{},
+		return &beefyclient.ClientState{},
 			fmt.Errorf("error when casting exported clientstate to tendermint type")
 	}
 
@@ -230,7 +229,7 @@ func castClientStateToBeefyType(cs *codectypes.Any) (*beefyclient.ClientState, e
 // except latest height. They are assumed to be IBC tendermint light clients.
 // NOTE: we don't pass in a pointer so upstream references don't have a modified
 // latest height set to zero.
-func isMatchingClient(clientStateA, clientStateB *beefyclientTypes.ClientState) bool {
+func isMatchingClient(clientStateA, clientStateB *beefyclient.ClientState) bool {
 	// zero out latest client height since this is determined and incremented
 	// by on-chain updates. Changing the latest height does not fundamentally
 	// change the client. The associated consensus state at the latest height
@@ -243,7 +242,7 @@ func isMatchingClient(clientStateA, clientStateB *beefyclientTypes.ClientState) 
 
 // isMatchingConsensusState determines if the two provided consensus states are
 // identical. They are assumed to be IBC tendermint light clients.
-func isMatchingConsensusState(consensusStateA, consensusStateB *beefyclientTypes.ConsensusState) bool {
+func isMatchingConsensusState(consensusStateA, consensusStateB *beefyclient.ConsensusState) bool {
 	return reflect.DeepEqual(*consensusStateA, *consensusStateB)
 }
 
