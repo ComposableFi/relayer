@@ -38,9 +38,15 @@ func (sp *SubstrateProvider) Init() error {
 		return err
 	}
 
+	lightClient, err := rpcClient.NewSubstrateAPI(sp.Config.LightClientRPCAddr)
+	if err != nil {
+		return err
+	}
+
 	sp.Keybase = keybase
 
 	sp.RPCClient = client
+	sp.LightClient = lightClient
 	return nil
 }
 
@@ -702,7 +708,7 @@ func (sp *SubstrateProvider) SendMessages(ctx context.Context, msgs []provider.R
 		return nil, false, err
 	}
 
-	c, err := rpcClientTypes.NewCall(meta, "IBC.deliver", msgs)
+	c, err := rpcClientTypes.NewCall(meta, "Ibc.deliver", msgs)
 	if err != nil {
 		return nil, false, err
 	}

@@ -4,6 +4,7 @@
     "key": "testkey",
     "chain-id": "ibc-1",
     "rpc-addr": "ws://127.0.0.1:9988",
+    "light-client-rpc-addr": "ws://127.0.0.1:9944",
     "grpc-addr": "",
     "account-prefix": "",
     "keyring-backend": "test",

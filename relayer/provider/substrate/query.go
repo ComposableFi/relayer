@@ -32,7 +32,12 @@ func (cc *SubstrateProvider) QueryTxs(ctx context.Context, page, limit int, even
 }
 
 func (sp *SubstrateProvider) QueryLatestHeight(ctx context.Context) (int64, error) {
-	signedBlock, err := sp.RPCClient.RPC.Chain.GetBlockLatest()
+	signedHash, err := sp.LightClient.RPC.Beefy.GetFinalizedHead()
+	if err != nil {
+		return 0, err
+	}
+
+	signedBlock, err := sp.LightClient.RPC.Chain.GetBlock(signedHash)
 	if err != nil {
 		return 0, err
 	}
@@ -41,26 +46,30 @@ func (sp *SubstrateProvider) QueryLatestHeight(ctx context.Context) (int64, erro
 }
 
 func (sp *SubstrateProvider) QueryHeaderAtHeight(ctx context.Context, height int64) (ibcexported.ClientMessage, error) {
-	latestBlockHash, err := sp.RPCClient.RPC.Chain.GetBlockHashLatest()
+	if height <= 0 {
+		return nil, fmt.Errorf("must pass in valid height, %d not valid", height)
+	}
+
+	latestBeefyBlockHash, err := sp.LightClient.RPC.Beefy.GetFinalizedHead()
 	if err != nil {
 		return nil, err
 	}
 
-	c, err := signedCommitment(sp.RPCClient, latestBlockHash)
+	latestBeefyHeight, err := sp.LightClient.RPC.Chain.GetBlock(latestBeefyBlockHash)
 	if err != nil {
 		return nil, err
 	}
 
-	if int64(c.Commitment.BlockNumber) < height {
+	if height > int64(latestBeefyHeight.Block.Header.Number) {
 		return nil, fmt.Errorf("queried block is not finalized")
 	}
 
-	blockHash, err := sp.RPCClient.RPC.Chain.GetBlockHash(uint64(height))
+	blockHash, err := sp.LightClient.RPC.Chain.GetBlockHash(uint64(height))
 	if err != nil {
 		return nil, err
 	}
 
-	return constructBeefyHeader(sp.RPCClient, blockHash)
+	return constructBeefyHeader(sp.LightClient, blockHash)
 }
 
 func (sp *SubstrateProvider) QueryBalance(ctx context.Context, keyName string) (sdk.Coins, error) {

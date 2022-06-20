@@ -717,7 +717,7 @@ func (cc *CosmosProvider) GetLightSignedHeaderAtHeight(ctx context.Context, h in
 	if h == 0 {
 		return nil, errors.New("height cannot be 0")
 	}
-
+	
 	lightBlock, err := cc.LightProvider.LightBlock(ctx, h)
 	if err != nil {
 		return nil, err
