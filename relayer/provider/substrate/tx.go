@@ -2,8 +2,9 @@ package substrate
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
-
+	"github.com/ComposableFi/go-substrate-rpc-client/v4/signature"
 	transfertypes "github.com/cosmos/ibc-go/v3/modules/apps/transfer/types"
 	conntypes "github.com/cosmos/ibc-go/v3/modules/core/03-connection/types"
 	commitmenttypes "github.com/cosmos/ibc-go/v3/modules/core/23-commitment/types"
@@ -702,13 +703,37 @@ func (sp *SubstrateProvider) SendMessage(ctx context.Context, msg provider.Relay
 	return sp.SendMessages(ctx, []provider.RelayerMessage{msg})
 }
 
+func hexToByte(h string) []byte {
+	b, err := hex.DecodeString(h)
+	if err != nil {
+		panic(err)
+	}
+	return b
+}
+
 func (sp *SubstrateProvider) SendMessages(ctx context.Context, msgs []provider.RelayerMessage) (*provider.RelayerTxResponse, bool, error) {
 	meta, err := sp.RPCClient.RPC.State.GetMetadataLatest()
 	if err != nil {
 		return nil, false, err
 	}
 
-	c, err := rpcClientTypes.NewCall(meta, "Ibc.deliver", msgs)
+	type Any struct {
+		TypeUrl string `protobuf:"bytes,1,opt,name=type_url,json=typeUrl,proto3" json:"type_url,omitempty"`
+		// Must be a valid serialized protocol buffer of the above specified type.
+		Value []byte `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
+	}
+
+	msg := msgs[0]
+	msgBytes, err := msg.MsgBytes()
+	if err != nil {
+		return nil, false, err
+	}
+
+	anyMsg := Any{
+		TypeUrl: msg.Type(),
+		Value: msgBytes,
+	}
+	c, err := rpcClientTypes.NewCall(meta, "Ibc.deliver", []Any{anyMsg})
 	if err != nil {
 		return nil, false, err
 	}
@@ -726,15 +751,24 @@ func (sp *SubstrateProvider) SendMessages(ctx context.Context, msgs []provider.R
 		return nil, false, err
 	}
 
-	info, err := sp.Keybase.Key(sp.Key())
+	//info, err := sp.Keybase.Key(sp.Key())
+	//if err != nil {
+	//	return nil, false, err
+	//}
+
+	// fmt.Printf("\n KEY %v ADDRESS %v URI %v  PUBKEY %+v\n", sp.Key(), info.GetAddress(), info.GetKeyringPair().URI, info.GetPublicKey())
+	// TODO: remove when cleaning up
+	devAccountPubKey := hexToByte("d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d")
+	devAccountAddress := "5yNZjX24n2eg7W6EVamaTXNQbWCwchhThEaSWB7V3GRjtHeL"
+	key, err := rpcClientTypes.CreateStorageKey(meta, "System", "Account", devAccountPubKey, nil)
 	if err != nil {
 		return nil, false, err
 	}
 
-	key, err := rpcClientTypes.CreateStorageKey(meta, "System", "Account", info.GetPublicKey(), nil)
-	if err != nil {
-		return nil, false, err
-	}
+	// TODO: remove when cleaning up
+	keyring := signature.TestKeyringPairAlice
+	keyring.PublicKey = devAccountPubKey
+	keyring.Address = devAccountAddress
 
 	var accountInfo rpcClientTypes.AccountInfo
 	ok, err := sp.RPCClient.RPC.State.GetStorageLatest(key, &accountInfo)
@@ -753,7 +787,8 @@ func (sp *SubstrateProvider) SendMessages(ctx context.Context, msgs []provider.R
 		Tip:         rpcClientTypes.NewUCompactFromUInt(0),
 	}
 
-	err = ext.Sign(info.GetKeyringPair(), o)
+	//err = ext.Sign(info.GetKeyringPair(), o)
+	err = ext.Sign(keyring, o)
 	if err != nil {
 		return nil, false, err
 	}
@@ -764,13 +799,14 @@ func (sp *SubstrateProvider) SendMessages(ctx context.Context, msgs []provider.R
 		return nil, false, err
 	}
 
+	fmt.Printf("transaction hash is %+v \n", hash.Hex())
 	// TODO: check if there's a go substrate rpc method to wait for finalization
 	rlyRes := &provider.RelayerTxResponse{
 		// TODO: What height is the height field in this struct? Is the transaction added to the blockchain right away?
 		TxHash: hash.Hex(),
 	}
 
-	return rlyRes, false, nil
+	return rlyRes, true, nil
 }
 
 func (sp *SubstrateProvider) GetLightSignedHeaderAtHeight(ctx context.Context, h int64) (ibcexported.ClientMessage, error) {

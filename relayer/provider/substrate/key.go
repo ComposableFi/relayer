@@ -42,6 +42,7 @@ func (sp *SubstrateProvider) RestoreKey(name, mnemonic string, coinType uint32) 
 	if err != nil {
 		return "", err
 	}
+
 	return ko.Address, nil
 }
 

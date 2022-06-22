@@ -250,7 +250,7 @@ func (ks keystore) NewAccount(name string, mnemonic string, network uint8) (Info
 
 	// reason for using network argument as 42
 	// https://github.com/ComposableFi/go-substrate-rpc-client/blob/master/signature/signature.go#L126
-	kp, err := signature.KeyringPairFromSecret(mnemonic, 42)
+	kp, err := signature.KeyringPairFromSecret(mnemonic, 49)
 	if err != nil {
 		fmt.Println("error while creating keypair: " + err.Error())
 	}

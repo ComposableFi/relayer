@@ -259,6 +259,7 @@ func (cc *CosmosProvider) TrustingPeriod(ctx context.Context) (time.Duration, er
 	return tp.Truncate(time.Hour), nil
 }
 
+
 // CreateClient creates an sdk.Msg to update the client on src with consensus state from dst
 func (cc *CosmosProvider) CreateClient(clientState ibcexported.ClientState, dstHeader ibcexported.ClientMessage) (provider.RelayerMessage, error) {
 	var (
