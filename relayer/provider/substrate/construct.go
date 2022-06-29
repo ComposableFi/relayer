@@ -159,16 +159,24 @@ func signedCommitment(conn *rpcclient.SubstrateAPI, blockHash rpcclientTypes.Has
 		return rpcclientTypes.SignedCommitment{}, err
 	}
 
+	//for _, v := range signedBlock.Justifications {
+	//	// not every relay chain block has a beefy justification
+	//	if bytes.Equal(v.ConsensusEngineID[:], []byte("BEEF")) {
+	//		compactCommitment := &rpcclientTypes.CompactSignedCommitment{}
+	//
+	//		err = rpcclientTypes.DecodeFromBytes(v.EncodedJustification, compactCommitment)
+	//		if err != nil {
+	//			return rpcclientTypes.SignedCommitment{}, err
+	//		}
+	//		return compactCommitment.Unpack(), nil
+	//	}
+	//}
 	for _, v := range signedBlock.Justifications {
-		// not every relay chain block has a beefy justification
 		if bytes.Equal(v.ConsensusEngineID[:], []byte("BEEF")) {
-			compactCommitment := &rpcclientTypes.CompactSignedCommitment{}
+			versionedFinalityProof := &rpcclientTypes.VersionedFinalityProof{}
 
-			err = rpcclientTypes.DecodeFromBytes(v.EncodedJustification, compactCommitment)
-			if err != nil {
-				return rpcclientTypes.SignedCommitment{}, err
-			}
-			return compactCommitment.Unpack(), nil
+			err = rpcclientTypes.DecodeFromBytes(v.EncodedJustification, versionedFinalityProof)
+			return versionedFinalityProof.AsCompactSignedCommitment.Unpack(), nil
 		}
 	}
 
@@ -358,16 +366,12 @@ func constructParachainHeaders(
 
 func mmrBatchProofs(
 	conn *rpcclient.SubstrateAPI,
+	cs *beefyClientTypes.ClientState,
 	blockHash rpcclientTypes.Hash,
 	commitment rpcclientTypes.SignedCommitment,
 ) (rpcclientTypes.GenerateMmrBatchProofResponse, error) {
-	cs, err := clientState(conn, commitment)
-	if err != nil {
-		return rpcclientTypes.GenerateMmrBatchProofResponse{}, err
-	}
-
 	var leafIndeces []uint64
-	_, leafIndeces, err = getFinalizedBlocks(conn, cs, blockHash)
+	_, leafIndeces, err := getFinalizedBlocks(conn, cs, blockHash)
 	if err != nil {
 		return rpcclientTypes.GenerateMmrBatchProofResponse{}, err
 	}
@@ -468,8 +472,43 @@ func mmrUpdateProof(
 	}, nil
 }
 
+func previouslyFinalizedBlock(conn *rpcclient.SubstrateAPI, blockNumber uint64) (rpcclientTypes.Hash, error) {
+	var previousBlock = blockNumber
+	var previousHash rpcclientTypes.Hash
+	for {
+		previousBlock = previousBlock - 1
+		blockHash, err := conn.RPC.Chain.GetBlockHash(previousBlock)
+		if err != nil {
+			return rpcclientTypes.Hash{}, err
+		}
+		previousHash = blockHash
+
+		commitment, err := signedCommitment(conn, blockHash)
+		if err != nil {
+			return rpcclientTypes.Hash{}, err
+		}
+
+		if commitment.Commitment.BlockNumber == 0 {
+			continue
+		}
+
+		return previousHash, nil
+	}
+}
+
 func constructBeefyHeader(conn *rpcclient.SubstrateAPI, blockHash rpcclientTypes.Hash) (*beefyClientTypes.Header, error) {
-	commitment, err := signedCommitment(conn, blockHash)
+	// assuming blockHash is always the latest beefy block hash
+	latestFinalizedBlock, err := conn.RPC.Chain.GetBlock(blockHash)
+	if err != nil {
+		return nil, err
+	}
+
+	pHash, err := previouslyFinalizedBlock(conn, uint64(latestFinalizedBlock.Block.Header.Number))
+	if err != nil {
+		return nil, err
+	}
+
+	commitment, err := signedCommitment(conn, pHash)
 	if err != nil {
 		return nil, err
 	}
@@ -479,19 +518,24 @@ func constructBeefyHeader(conn *rpcclient.SubstrateAPI, blockHash rpcclientTypes
 		return nil, err
 	}
 
+	latestCommitment, err := signedCommitment(conn, blockHash)
+	if err != nil {
+		return nil, err
+	}
+
 	parachainHeads, err := constructParachainHeaders(conn, blockHash, cs)
 	if err != nil {
 		return nil, err
 	}
 
-	batchProofs, err := mmrBatchProofs(conn, blockHash, commitment)
+	batchProofs, err := mmrBatchProofs(conn, cs, blockHash, latestCommitment)
 	if err != nil {
 		return nil, err
 	}
 
-	leafIndex := cs.GetLeafIndexForBlockNumber(uint32(commitment.Commitment.BlockNumber))
-	blockNumber := uint32(commitment.Commitment.BlockNumber)
-	updateProof, err := mmrUpdateProof(conn, blockHash, commitment, uint64(cs.GetLeafIndexForBlockNumber(blockNumber)))
+	leafIndex := cs.GetLeafIndexForBlockNumber(uint32(latestCommitment.Commitment.BlockNumber))
+	blockNumber := uint32(latestCommitment.Commitment.BlockNumber)
+	updateProof, err := mmrUpdateProof(conn, blockHash, latestCommitment, uint64(cs.GetLeafIndexForBlockNumber(blockNumber)))
 	if err != nil {
 		return nil, err
 	}

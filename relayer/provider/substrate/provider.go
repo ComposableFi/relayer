@@ -31,10 +31,12 @@ var (
 )
 
 type SubstrateProvider struct {
-	Config    *SubstrateProviderConfig
-	RPCClient *rpcClient.SubstrateAPI
-	Keybase   keystore.Keyring
-	Input     io.Reader
+	Config      *SubstrateProviderConfig
+	RPCClient   *rpcClient.SubstrateAPI
+	LightClient *rpcClient.SubstrateAPI
+	LatestBeefyHeight int64
+	Keybase     keystore.Keyring
+	Input       io.Reader
 }
 
 type SubstrateRelayerMessage struct {
@@ -99,13 +101,14 @@ func (sp *SubstrateProvider) BlockTime(ctx context.Context, height int64) (int64
 }
 
 type SubstrateProviderConfig struct {
-	Timeout        string `json:"timeout" yaml:"timeout"`
-	RPCAddr        string `json:"rpc-addr" yaml:"rpc-addr"`
-	ChainID        string `json:"chain-id" yaml:"chain-id"`
-	Key            string `json:"key" yaml:"key"`
-	KeyringBackend string `json:"keyring-backend" yaml:"keyring-backend"`
-	KeyDirectory   string `json:"key-directory" yaml:"key-directory"`
-	Debug          bool   `json:"debug" yaml:"debug"`
+	Timeout            string `json:"timeout" yaml:"timeout"`
+	RPCAddr            string `json:"rpc-addr" yaml:"rpc-addr"`
+	LightClientRPCAddr string `json:"light-client-rpc-addr" yaml:"light-client-rpc-addr"`
+	ChainID            string `json:"chain-id" yaml:"chain-id"`
+	Key                string `json:"key" yaml:"key"`
+	KeyringBackend     string `json:"keyring-backend" yaml:"keyring-backend"`
+	KeyDirectory       string `json:"key-directory" yaml:"key-directory"`
+	Debug              bool   `json:"debug" yaml:"debug"`
 }
 
 func (spc *SubstrateProviderConfig) NewProvider(log *zap.Logger, homepath string, debug bool) (provider.ChainProvider, error) {

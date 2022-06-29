@@ -21,6 +21,7 @@ func (c *Chain) CreateClients(ctx context.Context, dst *Chain, allowUpdateAfterE
 		var err error
 		srch, dsth, err = QueryLatestHeights(ctx, c, dst)
 		if srch == 0 || dsth == 0 || err != nil {
+			fmt.Printf("##### querying lates height failed srch %v  dsth %v  err: %v \n", srch, dsth, err)
 			return fmt.Errorf("failed to query latest heights: %w", err)
 		}
 		return nil
@@ -144,7 +145,7 @@ func CreateClient(ctx context.Context, src, dst *Chain, srcUpdateHeader, dstUpda
 	}
 
 	// Create the ClientState we want on 'src' tracking 'dst'
-	clientState, err := src.ChainProvider.NewClientState(dstUpdateHeader, tp, ubdPeriod, allowUpdateAfterExpiry, allowUpdateAfterMisbehaviour)
+	clientState, err := dst.ChainProvider.NewClientState(dstUpdateHeader, tp, ubdPeriod, allowUpdateAfterExpiry, allowUpdateAfterMisbehaviour)
 	if err != nil {
 		return false, fmt.Errorf("failed to create new client state for chain{%s} tracking chain{%s}: %w", src.ChainID(), dst.ChainID(), err)
 	}
@@ -174,7 +175,7 @@ func CreateClient(ctx context.Context, src, dst *Chain, srcUpdateHeader, dstUpda
 		zap.String("dst_chain_id", dst.ChainID()),
 	)
 
-	createMsg, err := src.ChainProvider.CreateClient(clientState, dstUpdateHeader)
+	createMsg, err := dst.ChainProvider.CreateClient(clientState, dstUpdateHeader)
 	if err != nil {
 		return false, fmt.Errorf("failed to compose CreateClient msg for chain{%s}: %w", src.ChainID(), err)
 	}
