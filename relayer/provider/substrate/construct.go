@@ -147,8 +147,8 @@ func beefyAuthorities(blockNumber uint32, conn *rpcclient.SubstrateAPI, method s
 	return authorityEthereumAddresses, nil
 }
 
-func bytes32(bytes []byte) [32]byte {
-	var buffer [32]byte
+func bytes32(bytes []byte) beefyClientTypes.SizedByte32 {
+	var buffer beefyClientTypes.SizedByte32
 	copy(buffer[:], bytes)
 	return buffer
 }
@@ -419,7 +419,9 @@ func mmrUpdateProof(
 	}
 
 	var signatures []*beefyClientTypes.CommitmentSignature
-	var authorityIndeces []uint32
+	var
+
+	authorityIndeces []uint32
 	// luckily for us, this is already sorted and maps to the right authority index in the authority root.
 	for i, v := range signedCommitment.Signatures {
 		if v.IsSome() {
@@ -446,6 +448,7 @@ func mmrUpdateProof(
 		panic(err)
 	}
 
+	var payloadId beefyClientTypes.SizedByte2 = CommitmentPayload.ID
 	return &beefyClientTypes.MmrUpdateProof{
 		MmrLeaf: &beefyClientTypes.BeefyMmrLeaf{
 			Version:        latestLeaf.Version,
@@ -462,7 +465,9 @@ func mmrUpdateProof(
 		MmrProof:     latestLeafMmrProof,
 		SignedCommitment: &beefyClientTypes.SignedCommitment{
 			Commitment: &beefyClientTypes.Commitment{
-				Payload:        []*beefyClientTypes.PayloadItem{{PayloadId: &CommitmentPayload.ID, PayloadData: CommitmentPayload.Value}},
+				Payload:        []*beefyClientTypes.PayloadItem{
+					{PayloadId: &payloadId, PayloadData: CommitmentPayload.Value},
+				},
 				BlockNumer:     uint32(signedCommitment.Commitment.BlockNumber),
 				ValidatorSetId: uint64(signedCommitment.Commitment.ValidatorSetID),
 			},
@@ -472,27 +477,27 @@ func mmrUpdateProof(
 	}, nil
 }
 
-func previouslyFinalizedBlock(conn *rpcclient.SubstrateAPI, blockNumber uint64) (rpcclientTypes.Hash, error) {
+func previouslyFinalizedBlock(conn *rpcclient.SubstrateAPI, blockNumber uint64) (rpcclientTypes.Hash, uint64, error) {
 	var previousBlock = blockNumber
 	var previousHash rpcclientTypes.Hash
 	for {
 		previousBlock = previousBlock - 1
 		blockHash, err := conn.RPC.Chain.GetBlockHash(previousBlock)
 		if err != nil {
-			return rpcclientTypes.Hash{}, err
+			return rpcclientTypes.Hash{}, 0, err
 		}
 		previousHash = blockHash
 
 		commitment, err := signedCommitment(conn, blockHash)
 		if err != nil {
-			return rpcclientTypes.Hash{}, err
+			return rpcclientTypes.Hash{}, 0, err
 		}
 
 		if commitment.Commitment.BlockNumber == 0 {
 			continue
 		}
 
-		return previousHash, nil
+		return previousHash, previousBlock, nil
 	}
 }
 
@@ -503,7 +508,7 @@ func constructBeefyHeader(conn *rpcclient.SubstrateAPI, blockHash rpcclientTypes
 		return nil, err
 	}
 
-	pHash, err := previouslyFinalizedBlock(conn, uint64(latestFinalizedBlock.Block.Header.Number))
+	pHash, pBlock, err := previouslyFinalizedBlock(conn, uint64(latestFinalizedBlock.Block.Header.Number))
 	if err != nil {
 		return nil, err
 	}
@@ -541,6 +546,7 @@ func constructBeefyHeader(conn *rpcclient.SubstrateAPI, blockHash rpcclientTypes
 	}
 
 	return &beefyClientTypes.Header{
+		PreviouslyFinalized: pBlock,
 		ParachainHeaders: parachainHeads,
 		MmrProofs:        mmrBatchProofItems(batchProofs),
 		MmrSize:          mmr.LeafIndexToMMRSize(uint64(leafIndex)),

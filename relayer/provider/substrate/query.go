@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	rpcClientTypes "github.com/ComposableFi/go-substrate-rpc-client/v4/types"
 	beefyClientTypes "github.com/cosmos/ibc-go/v3/modules/light-clients/11-beefy/types"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -34,13 +33,11 @@ func (cc *SubstrateProvider) QueryTxs(ctx context.Context, page, limit int, even
 func (sp *SubstrateProvider) QueryLatestHeight(ctx context.Context) (int64, error) {
 	signedHash, err := sp.LightClient.RPC.Beefy.GetFinalizedHead()
 	if err != nil {
-		fmt.Printf("error getting finalized head!!! \n")
 		return 0, err
 	}
 
 	signedBlock, err := sp.LightClient.RPC.Chain.GetBlock(signedHash)
 	if err != nil {
-		fmt.Printf("error getting block!!! \n")
 		return 0, err
 	}
 
@@ -227,10 +224,10 @@ func (sp *SubstrateProvider) AutoUpdateClient(ctx context.Context, dst provider.
 			srcClientId, sp.Config.ChainID)
 	}
 
-	srcUpdateHeader, err := sp.GetIBCUpdateHeader(ctx, srch, dst, dstClientId)
-	if err != nil {
-		return 0, err
-	}
+	//srcUpdateHeader, err := sp.GetIBCUpdateHeader(ctx, srch, dst, dstClientId)
+	//if err != nil {
+	//	return 0, err
+	//}
 
 	dstUpdateHeader, err := dst.GetIBCUpdateHeader(ctx, dsth, sp, srcClientId)
 	if err != nil {
@@ -252,12 +249,12 @@ func (sp *SubstrateProvider) AutoUpdateClient(ctx context.Context, dst provider.
 	if !success {
 		return 0, fmt.Errorf("tx failed: %s", res.Data)
 	}
-	sp.Log(fmt.Sprintf("★ Client updated: [%s]client(%s) {%d}->{%d}",
-		sp.Config.ChainID,
-		srcClientId,
-		MustGetHeight(srcUpdateHeader.GetHeight()),
-		srcUpdateHeader.GetHeight().GetRevisionHeight(),
-	))
+	//sp.Log(fmt.Sprintf("★ Client updated: [%s]client(%s) {%d}->{%d}",
+	//	sp.Config.ChainID,
+	//	srcClientId,
+	//	MustGetHeight(srcUpdateHeader.GetHeight()),
+	//	srcUpdateHeader.GetHeight().GetRevisionHeight(),
+	//))
 
 	return maxDuration(), nil
 }
@@ -449,24 +446,33 @@ func (sp *SubstrateProvider) NewClientState(
 		return nil, fmt.Errorf("got data of type %T but wanted  beefyClientType.Header \n", dstUpdateHeader)
 	}
 
-	parachainHeader := dstBeefyHeader.ParachainHeaders[0].ParachainHeader
-	substrateHeader := &rpcClientTypes.Header{}
-	err := Decode(parachainHeader, substrateHeader)
+
+	// fmt.Printf("### attempting to decode bytes into HEADATA\n")
+	// parachainHeader := dstBeefyHeader.ParachainHeaders[0].ParachainHeader
+	//var headData rpcClientTypes.HeadData
+	//err := rpcClientTypes.DecodeFromBytes(parachainHeader, &headData)
+	//if err != nil {
+	//	fmt.Printf("### error decoding into headdata %v \n", parachainHeader)
+	//	return nil, err
+	//}
+	//
+	//var substrateHeader	rpcClientTypes.Header
+	//err = rpcClientTypes.DecodeFromBytes(headData.Head, &substrateHeader)
+	//if err != nil {
+	//	return nil, err
+	//}
+
+	blockHash, err := sp.LightClient.RPC.Chain.GetBlockHash(uint64(dstBeefyHeader.PreviouslyFinalized))
 	if err != nil {
 		return nil, err
 	}
 
-	blockHash, err := sp.RPCClient.RPC.Chain.GetBlockHash(uint64(substrateHeader.Number))
+	commitment, err := signedCommitment(sp.LightClient, blockHash)
 	if err != nil {
 		return nil, err
 	}
 
-	commitment, err := signedCommitment(sp.RPCClient, blockHash)
-	if err != nil {
-		return nil, err
-	}
-
-	cs, err := clientState(sp.RPCClient, commitment)
+	cs, err := clientState(sp.LightClient, commitment)
 	if err != nil {
 		return nil, err
 	}

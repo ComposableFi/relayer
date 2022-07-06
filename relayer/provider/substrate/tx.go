@@ -56,13 +56,14 @@ func (sp *SubstrateProvider) CreateClient(clientState ibcexported.ClientState, d
 		acc string
 		err error
 	)
-	if err := dstHeader.ValidateBasic(); err != nil {
-		return nil, err
-	}
+	// TODO: fix head decoding error in validate basic
+	//if err := dstHeader.ValidateBasic(); err != nil {
+	//	return nil, err
+	//}
 
-	tmHeader, ok := dstHeader.(*beefyclient.Header)
+	beefyHeader, ok := dstHeader.(*beefyclient.Header)
 	if !ok {
-		return nil, fmt.Errorf("got data of type %T but wanted tmclient.Header \n", dstHeader)
+		return nil, fmt.Errorf("got data of type %T but wanted beefyclient.Header \n", dstHeader)
 	}
 
 	if acc, err = sp.Address(); err != nil {
@@ -74,7 +75,7 @@ func (sp *SubstrateProvider) CreateClient(clientState ibcexported.ClientState, d
 		return nil, err
 	}
 
-	anyConsensusState, err := clienttypes.PackConsensusState(tmHeader.ConsensusState())
+	anyConsensusState, err := clienttypes.PackConsensusState(beefyHeader.ConsensusState())
 	if err != nil {
 		return nil, err
 	}
@@ -746,8 +747,13 @@ func (sp *SubstrateProvider) SendMessages(ctx context.Context, msgs []provider.R
 		return nil, false, err
 	}
 
+	sc, err := rpcClientTypes.NewCall(meta, "Sudo.sudo", c)
+	if err != nil {
+		return nil, false, err
+	}
+
 	// Create the extrinsic
-	ext := rpcClientTypes.NewExtrinsic(c)
+	ext := rpcClientTypes.NewExtrinsic(sc)
 
 	genesisHash, err := sp.RPCClient.RPC.Chain.GetBlockHash(0)
 	if err != nil {
@@ -803,17 +809,42 @@ func (sp *SubstrateProvider) SendMessages(ctx context.Context, msgs []provider.R
 	}
 
 	// Send the extrinsic
-	hash, err := sp.RPCClient.RPC.Author.SubmitExtrinsic(ext)
+	sub, err := sp.RPCClient.RPC.Author.SubmitAndWatchExtrinsic(ext)
 	if err != nil {
 		fmt.Printf("Extrinsic Error: %v \n", err.Error())
 		return nil, false, err
 	}
 
-	fmt.Printf("transaction hash is %+v \n", hash.Hex())
-	// TODO: check if there's a go substrate rpc method to wait for finalization
+	var status rpcClientTypes.ExtrinsicStatus
+	defer sub.Unsubscribe()
+	for {
+		status = <-sub.Chan()
+
+		// wait until finalisation
+		if status.IsFinalized {
+			fmt.Printf("BLOCK %v is finalized \n", status.AsFinalized.Hex())
+			break
+		}
+
+		fmt.Printf("waiting for the extrinsic to be included/finalized")
+	}
+
+	fmt.Printf("block hash is %v \n", status.AsFinalized.Hex())
+
+	clients, err := sp.RPCClient.RPC.IBC.QueryNewlyCreatedClients(status.AsFinalized)
+	if err != nil {
+		return nil, false, err
+	}
+	 fmt.Printf("CLIENTS %v \n", clients)
 	rlyRes := &provider.RelayerTxResponse{
-		// TODO: What height is the height field in this struct? Is the transaction added to the blockchain right away?
-		TxHash: hash.Hex(),
+		TxHash: status.AsUsurped.Hex(),
+		Events: []provider.RelayerEvent{
+			{
+				EventType: clienttypes.EventTypeCreateClient,
+				AttributeKey: clienttypes.AttributeKeyClientID,
+				AttributeValue: clients[0].ClientId,
+			},
+		},
 	}
 
 	return rlyRes, true, nil
@@ -870,8 +901,9 @@ func (sp *SubstrateProvider) Timeout() string {
 	return sp.Config.Timeout
 }
 
+// TODO: define a more accurate trusting period
 func (sp *SubstrateProvider) TrustingPeriod(ctx context.Context) (time.Duration, error) {
-	return 0, nil
+	return maxDuration(), nil
 }
 
 func (sp *SubstrateProvider) WaitForNBlocks(ctx context.Context, n int64) error {

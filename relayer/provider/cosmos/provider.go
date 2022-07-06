@@ -1676,6 +1676,7 @@ func (cc *CosmosProvider) SendMessages(ctx context.Context, msgs []provider.Rela
 		resp, err = cc.BroadcastTx(ctx, txBytes)
 		if err != nil {
 			if err == sdkerrors.ErrWrongSequence {
+				fmt.Printf("### errror broadcastng tx \n")
 				// Allow retrying if we got an invalid sequence error when attempting to broadcast this tx.
 				return err
 			}
@@ -1735,6 +1736,24 @@ func parseEventsFromTxResponse(resp *sdk.TxResponse) []provider.RelayerEvent {
 }
 
 func (cc *CosmosProvider) buildMessages(ctx context.Context, msgs []provider.RelayerMessage) ([]byte, error) {
+	cliCtx := client.Context{}.WithClient(cc.RPCClient).
+		WithInterfaceRegistry(cc.Codec.InterfaceRegistry).
+		WithChainID(cc.Config.ChainID).
+		WithCodec(cc.Codec.Marshaler)
+
+	from, err := cc.GetKeyAddress()
+	if err != nil {
+		return nil, err
+	}
+
+	acc, err := cc.GetAccount(cliCtx, from)
+	if err != nil {
+		fmt.Printf("### error getting addess for %s, err: %v\n", from, err)
+		return nil, err
+	}
+
+	fmt.Printf("### ACCOUNT %v  address %v\n",acc, acc.GetAddress())
+
 	// Query account details
 	txf, err := cc.PrepareFactory(cc.TxFactory())
 	if err != nil {
@@ -1747,6 +1766,7 @@ func (cc *CosmosProvider) buildMessages(ctx context.Context, msgs []provider.Rel
 	// If users pass gas adjustment, then calculate gas
 	_, adjusted, err := cc.CalculateGas(ctx, txf, CosmosMsgs(msgs...)...)
 	if err != nil {
+		fmt.Printf("### errror calculating gas \n")
 		return nil, err
 	}
 
@@ -1758,6 +1778,7 @@ func (cc *CosmosProvider) buildMessages(ctx context.Context, msgs []provider.Rel
 	if err := retry.Do(func() error {
 		txb, err = tx.BuildUnsignedTx(txf, CosmosMsgs(msgs...)...)
 		if err != nil {
+			fmt.Printf("### errror building unsigned tx\n")
 			return err
 		}
 		return nil
@@ -1775,6 +1796,7 @@ func (cc *CosmosProvider) buildMessages(ctx context.Context, msgs []provider.Rel
 
 	if err := retry.Do(func() error {
 		if err := tx.Sign(txf, cc.PCfg.Key, txb, false); err != nil {
+			fmt.Printf("### errror signing tx \n")
 			return err
 		}
 		return nil

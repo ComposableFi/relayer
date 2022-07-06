@@ -21,7 +21,6 @@ func (c *Chain) CreateClients(ctx context.Context, dst *Chain, allowUpdateAfterE
 		var err error
 		srch, dsth, err = QueryLatestHeights(ctx, c, dst)
 		if srch == 0 || dsth == 0 || err != nil {
-			fmt.Printf("##### querying lates height failed srch %v  dsth %v  err: %v \n", srch, dsth, err)
 			return fmt.Errorf("failed to query latest heights: %w", err)
 		}
 		return nil
@@ -66,15 +65,15 @@ func (c *Chain) CreateClients(ctx context.Context, dst *Chain, allowUpdateAfterE
 		return nil
 	})
 
-	eg.Go(func() error {
-		var err error
-		// Create client on dst for src if the client id is unspecified
-		modifiedDst, err = CreateClient(egCtx, dst, c, dstUpdateHeader, srcUpdateHeader, allowUpdateAfterExpiry, allowUpdateAfterMisbehaviour, override)
-		if err != nil {
-			return fmt.Errorf("failed to create client on dst chain{%s}: %w", dst.ChainID(), err)
-		}
-		return nil
-	})
+	//eg.Go(func() error {
+	//	var err error
+	//	// Create client on dst for src if the client id is unspecified
+	//	modifiedDst, err = CreateClient(egCtx, dst, c, dstUpdateHeader, srcUpdateHeader, allowUpdateAfterExpiry, allowUpdateAfterMisbehaviour, override)
+	//	if err != nil {
+	//		return fmt.Errorf("failed to create client on dst chain{%s}: %w", dst.ChainID(), err)
+	//	}
+	//	return nil
+	//})
 
 	if err := eg.Wait(); err != nil {
 		// If one completed successfully and the other didn't, we can still report modified.
@@ -101,7 +100,6 @@ func CreateClient(ctx context.Context, src, dst *Chain, srcUpdateHeader, dstUpda
 			return false, fmt.Errorf("please ensure provided on-chain client (%s) exists on the chain (%s): %v",
 				src.PathEnd.ClientID, src.ChainID(), err)
 		}
-
 		return false, nil
 	}
 
@@ -123,13 +121,13 @@ func CreateClient(ctx context.Context, src, dst *Chain, srcUpdateHeader, dstUpda
 		return false, err
 	}
 
-	src.log.Debug(
-		"Creating client",
-		zap.String("src_chain_id", src.ChainID()),
-		zap.String("dst_chain_id", dst.ChainID()),
-		zap.Uint64("dst_header_height", dstUpdateHeader.GetHeight().GetRevisionHeight()),
-		zap.Duration("trust_period", tp),
-	)
+	//src.log.Debug(
+	//	"Creating client",
+	//	zap.String("src_chain_id", src.ChainID()),
+	//	zap.String("dst_chain_id", dst.ChainID()),
+	//	zap.Uint64("dst_header_height", dstUpdateHeader.GetHeight().GetRevisionHeight()),
+	//	zap.Duration("trust_period", tp),
+	//)
 
 	// Query the unbonding period for dst and retry if the query fails
 	var ubdPeriod time.Duration
@@ -152,6 +150,8 @@ func CreateClient(ctx context.Context, src, dst *Chain, srcUpdateHeader, dstUpda
 
 	var clientID string
 	var found bool
+	// TODO: remove this variable initialization
+	override = true
 	// Will not reuse same client if override is true
 	if !override {
 		// Check if an identical light client already exists
@@ -181,7 +181,6 @@ func CreateClient(ctx context.Context, src, dst *Chain, srcUpdateHeader, dstUpda
 	}
 
 	msgs := []provider.RelayerMessage{createMsg}
-
 	// if a matching client does not exist, create one
 	var res *provider.RelayerTxResponse
 	if err := retry.Do(func() error {
@@ -202,7 +201,6 @@ func CreateClient(ctx context.Context, src, dst *Chain, srcUpdateHeader, dstUpda
 	}, retry.Context(ctx), RtyAtt, RtyDel, RtyErr); err != nil {
 		return false, err
 	}
-
 	// update the client identifier
 	// use index 0, the transaction only has one message
 	if clientID, err = ParseClientIDFromEvents(res.Events); err != nil {
