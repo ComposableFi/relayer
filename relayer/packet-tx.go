@@ -67,14 +67,14 @@ func (c *Chain) SendTransferMsg(ctx context.Context, log *zap.Logger, dst *Chain
 
 	switch {
 	case toHeightOffset > 0 && toTimeOffset > 0:
-		timeoutHeight = h.GetHeight().GetRevisionHeight() + toHeightOffset
+		timeoutHeight = ClientHeight(h).GetRevisionHeight() + toHeightOffset
 	case toHeightOffset > 0:
-		timeoutHeight = h.GetHeight().GetRevisionHeight() + toHeightOffset
+		timeoutHeight = ClientHeight(h).GetRevisionHeight() + toHeightOffset
 		timeoutTimestamp = 0
 	case toTimeOffset > 0:
 		timeoutHeight = 0
 	case toHeightOffset == 0 && toTimeOffset == 0:
-		timeoutHeight = h.GetHeight().GetRevisionHeight() + 1000
+		timeoutHeight = ClientHeight(h).GetRevisionHeight() + 1000
 		timeoutTimestamp = 0
 	}
 

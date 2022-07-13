@@ -8,10 +8,10 @@ import (
 	transfertypes "github.com/cosmos/ibc-go/v3/modules/apps/transfer/types"
 	conntypes "github.com/cosmos/ibc-go/v3/modules/core/03-connection/types"
 	commitmenttypes "github.com/cosmos/ibc-go/v3/modules/core/23-commitment/types"
+	beefyclient "github.com/cosmos/ibc-go/v3/modules/light-clients/11-beefy/types"
+	"github.com/cosmos/relayer/v2/relayer/provider/cosmos"
 	"github.com/gogo/protobuf/proto"
 	"time"
-
-	beefyclient "github.com/cosmos/ibc-go/v3/modules/light-clients/11-beefy/types"
 
 	rpcClient "github.com/ComposableFi/go-substrate-rpc-client/v4"
 	rpcClientTypes "github.com/ComposableFi/go-substrate-rpc-client/v4/types"
@@ -51,42 +51,47 @@ func (sp *SubstrateProvider) Init() error {
 	return nil
 }
 
-func (sp *SubstrateProvider) CreateClient(clientState ibcexported.ClientState, dstHeader ibcexported.ClientMessage) (provider.RelayerMessage, error) {
+func (sp *SubstrateProvider) CreateClient(clientState ibcexported.ClientState, dstHeader ibcexported.ClientMessage, signer string) (provider.RelayerMessage, error) {
 	var (
-		acc string
+		// acc string
 		err error
 	)
 	// TODO: fix head decoding error in validate basic
-	//if err := dstHeader.ValidateBasic(); err != nil {
-	//	return nil, err
-	//}
+	if err := dstHeader.ValidateBasic(); err != nil {
+		return nil, err
+	}
 
+	fmt.Printf("### typing to dst header \n")
 	beefyHeader, ok := dstHeader.(*beefyclient.Header)
 	if !ok {
 		return nil, fmt.Errorf("got data of type %T but wanted beefyclient.Header \n", dstHeader)
 	}
 
-	if acc, err = sp.Address(); err != nil {
-		return nil, err
-	}
+	//if acc, err = sp.Address(); err != nil {
+	//	return nil, err
+	//}
 
+	fmt.Printf("### packing client state\n")
 	anyClientState, err := clienttypes.PackClientState(clientState)
 	if err != nil {
 		return nil, err
 	}
 
+	fmt.Printf("### consensus state \n")
 	anyConsensusState, err := clienttypes.PackConsensusState(beefyHeader.ConsensusState())
 	if err != nil {
 		return nil, err
 	}
 
+	fmt.Printf("### putting data ins MSGCREATECLIENT \n")
 	msg := &clienttypes.MsgCreateClient{
 		ClientState:    anyClientState,
 		ConsensusState: anyConsensusState,
-		Signer:         acc,
+		Signer:         signer,
 	}
-
-	return NewSubstrateRelayerMessage(msg), nil
+	fmt.Printf("### returning new cosmos message \n")
+	//return NewSubstrateRelayerMessage(msg), nil
+	return cosmos.NewCosmosMessage(msg), nil
 }
 
 func (sp *SubstrateProvider) SubmitMisbehavior( /*TODO TBD*/ ) (provider.RelayerMessage, error) {
@@ -112,7 +117,7 @@ func (sp *SubstrateProvider) UpdateClient(srcClientId string, dstHeader ibcexpor
 
 	msg := &clienttypes.MsgUpdateClient{
 		ClientId: srcClientId,
-		Header:   anyHeader,
+		ClientMessage:   anyHeader,
 		Signer:   acc,
 	}
 

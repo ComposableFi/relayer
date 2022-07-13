@@ -3,6 +3,8 @@ package relayer
 import (
 	"context"
 	"fmt"
+	tmclient "github.com/cosmos/ibc-go/v3/modules/light-clients/07-tendermint/types"
+	beefyclient "github.com/cosmos/ibc-go/v3/modules/light-clients/11-beefy/types"
 	"time"
 
 	"github.com/avast/retry-go/v4"
@@ -91,11 +93,27 @@ func (c *Chain) CreateClients(ctx context.Context, dst *Chain, allowUpdateAfterE
 	return modifiedSrc || modifiedDst, nil
 }
 
+func ClientHeight(msg interface{}) ibcexported.Height {
+	switch t := msg.(type) {
+	case *tmclient.Header:
+		fmt.Printf("### this is a tendermint height \n")
+		return t.GetHeight()
+	case *beefyclient.Header:
+		fmt.Printf("### this is a beefy header\n")
+		return t.GetHeight()
+	default:
+		fmt.Printf("### no match found!!!")
+		return nil
+	}
+}
+
 func CreateClient(ctx context.Context, src, dst *Chain, srcUpdateHeader, dstUpdateHeader ibcexported.ClientMessage, allowUpdateAfterExpiry, allowUpdateAfterMisbehaviour, override bool) (bool, error) {
+	fmt.Printf("### starting create state client response \n")
 	// If a client ID was specified in the path, ensure it exists.
 	if src.PathEnd.ClientID != "" {
 		// TODO: check client is not expired
-		_, err := src.ChainProvider.QueryClientStateResponse(ctx, int64(srcUpdateHeader.GetHeight().GetRevisionHeight()), src.ClientID())
+		fmt.Printf("### Querying client state response \n")
+		_, err := src.ChainProvider.QueryClientStateResponse(ctx, int64(ClientHeight(srcUpdateHeader).GetRevisionHeight()), src.ClientID())
 		if err != nil {
 			return false, fmt.Errorf("please ensure provided on-chain client (%s) exists on the chain (%s): %v",
 				src.PathEnd.ClientID, src.ChainID(), err)
@@ -175,9 +193,14 @@ func CreateClient(ctx context.Context, src, dst *Chain, srcUpdateHeader, dstUpda
 		zap.String("dst_chain_id", dst.ChainID()),
 	)
 
-	createMsg, err := dst.ChainProvider.CreateClient(clientState, dstUpdateHeader)
+	srcAcc, err := src.ChainProvider.Address()
 	if err != nil {
-		return false, fmt.Errorf("failed to compose CreateClient msg for chain{%s}: %w", src.ChainID(), err)
+		return false, err
+	}
+
+	createMsg, err := dst.ChainProvider.CreateClient(clientState, dstUpdateHeader, srcAcc)
+	if err != nil {
+		return false, fmt.Errorf("failed to compose CreateClient msg for chain{%s}: %w", dst.ChainID(), err)
 	}
 
 	msgs := []provider.RelayerMessage{createMsg}
@@ -191,7 +214,7 @@ func CreateClient(ctx context.Context, src, dst *Chain, srcUpdateHeader, dstUpda
 			src.LogFailedTx(res, err, msgs)
 			return fmt.Errorf("failed to send messages on chain{%s}: %w", src.ChainID(), err)
 		}
-
+		fmt.Printf("### done sending messages \n")
 		if !success {
 			src.LogFailedTx(res, nil, msgs)
 			return fmt.Errorf("tx failed on chain{%s}: %s", src.ChainID(), res.Data)
@@ -299,13 +322,13 @@ func (c *Chain) UpdateClients(ctx context.Context, dst *Chain) (err error) {
 		"Clients updated",
 		zap.String("src_chain_id", c.ChainID()),
 		zap.String("src_client", c.PathEnd.ClientID),
-		zap.Stringer("src_height", MustGetHeight(srcUpdateHeader.GetHeight())),
-		zap.Uint64("src_revision_height", srcUpdateHeader.GetHeight().GetRevisionHeight()),
+		zap.Stringer("src_height", MustGetHeight(ClientHeight(srcUpdateHeader))),
+		zap.Uint64("src_revision_height", ClientHeight(srcUpdateHeader).GetRevisionHeight()),
 
 		zap.String("dst_chain_id", dst.ChainID()),
 		zap.String("dst_client", dst.PathEnd.ClientID),
-		zap.Stringer("dst_height", MustGetHeight(dstUpdateHeader.GetHeight())),
-		zap.Uint64("dst_revision_height", dstUpdateHeader.GetHeight().GetRevisionHeight()),
+		zap.Stringer("dst_height", MustGetHeight(ClientHeight(dstUpdateHeader))),
+		zap.Uint64("dst_revision_height", ClientHeight(dstUpdateHeader).GetRevisionHeight()),
 	)
 
 	return nil

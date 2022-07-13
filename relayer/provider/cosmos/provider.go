@@ -260,9 +260,9 @@ func (cc *CosmosProvider) TrustingPeriod(ctx context.Context) (time.Duration, er
 }
 
 // CreateClient creates an sdk.Msg to update the client on src with consensus state from dst
-func (cc *CosmosProvider) CreateClient(clientState ibcexported.ClientState, dstHeader ibcexported.ClientMessage) (provider.RelayerMessage, error) {
+func (cc *CosmosProvider) CreateClient(clientState ibcexported.ClientState, dstHeader ibcexported.ClientMessage, signer string) (provider.RelayerMessage, error) {
 	var (
-		acc string
+		// acc string
 		err error
 	)
 
@@ -271,9 +271,9 @@ func (cc *CosmosProvider) CreateClient(clientState ibcexported.ClientState, dstH
 		return nil, fmt.Errorf("got data of type %T but wanted tmclient.Header", dstHeader)
 	}
 
-	if acc, err = cc.Address(); err != nil {
-		return nil, err
-	}
+	//if acc, err = cc.Address(); err != nil {
+	//	return nil, err
+	//}
 
 	anyClientState, err := clienttypes.PackClientState(clientState)
 	if err != nil {
@@ -288,7 +288,7 @@ func (cc *CosmosProvider) CreateClient(clientState ibcexported.ClientState, dstH
 	msg := &clienttypes.MsgCreateClient{
 		ClientState:    anyClientState,
 		ConsensusState: anyConsensusState,
-		Signer:         acc,
+		Signer:         signer,
 	}
 	if err != nil {
 		return nil, err
@@ -314,7 +314,7 @@ func (cc *CosmosProvider) UpdateClient(srcClientId string, dstHeader ibcexported
 
 	msg := &clienttypes.MsgUpdateClient{
 		ClientId: srcClientId,
-		Header:   anyHeader,
+		ClientMessage:   anyHeader,
 		Signer:   acc,
 	}
 
@@ -1120,27 +1120,31 @@ func (cc *CosmosProvider) relayPacketsFromResultTx(ctx context.Context, src, dst
 		}
 
 		// fetch the header which represents a block produced on destination
-		block, err := dst.GetIBCUpdateHeader(ctx, dsth, src, srcClientId)
-		if err != nil {
-			return nil, nil, err
-		}
+		//TODO: refactor to work for client_message
+		//block, err := dst.GetIBCUpdateHeader(ctx, dsth, src, srcClientId)
+		//if err != nil {
+		//	return nil, nil, err
+		//}
 
 		// if the timestamp is set on the packet, we need to retrieve the current block time from dst
-		var dstBlockTime int64
-		if rp.timeoutStamp > 0 {
-			dstBlockTime, err = dst.BlockTime(ctx, dsth)
-			if err != nil {
-				return nil, nil, err
-			}
-		}
+		//TODO: refactor to work for client_message
+		//var dstBlockTime int64
+		//if rp.timeoutStamp > 0 {
+		//	dstBlockTime, err = dst.BlockTime(ctx, dsth)
+		//	if err != nil {
+		//		return nil, nil, err
+		//	}
+		//}
 
+		//TODO: refactor to work for client_message
 		switch {
 		// If the packet has a timeout time, and it has been reached, return a timeout packet
-		case rp.timeoutStamp > 0 && uint64(dstBlockTime) > rp.timeoutStamp:
-			timeoutPackets = append(timeoutPackets, rp.timeoutPacket())
+		//case rp.timeoutStamp > 0 && uint64(dstBlockTime) > rp.timeoutStamp:
+		//	timeoutPackets = append(timeoutPackets, rp.timeoutPacket())
 		// If the packet has a timeout height, and it has been reached, return a timeout packet
-		case !rp.timeout.IsZero() && block.GetHeight().GTE(rp.timeout):
-			timeoutPackets = append(timeoutPackets, rp.timeoutPacket())
+		//TODO: refactor to work for client_message
+		//case !rp.timeout.IsZero() && block.GetHeight().GTE(rp.timeout):
+		//	timeoutPackets = append(timeoutPackets, rp.timeoutPacket())
 		// If the packet matches the relay constraints relay it as a MsgReceivePacket
 		case !rp.pass:
 			rcvPackets = append(rcvPackets, rp)
@@ -1317,10 +1321,11 @@ func (cc *CosmosProvider) AutoUpdateClient(ctx context.Context, dst provider.Cha
 		return 0, fmt.Errorf("client (%s) is already expired on chain: %s", srcClientId, cc.PCfg.ChainID)
 	}
 
-	srcUpdateHeader, err := cc.GetIBCUpdateHeader(ctx, srch, dst, dstClientId)
-	if err != nil {
-		return 0, err
-	}
+	//TODO: refactor to work for client_message
+	//srcUpdateHeader, err := cc.GetIBCUpdateHeader(ctx, srch, dst, dstClientId)
+	//if err != nil {
+	//	return 0, err
+	//}
 
 	dstUpdateHeader, err := dst.GetIBCUpdateHeader(ctx, dsth, cc, srcClientId)
 	if err != nil {
@@ -1342,13 +1347,14 @@ func (cc *CosmosProvider) AutoUpdateClient(ctx context.Context, dst provider.Cha
 	if !success {
 		return 0, fmt.Errorf("tx failed: %s", res.Data)
 	}
-	cc.log.Info(
-		"Client updated",
-		zap.String("provider_chain_id", cc.PCfg.ChainID),
-		zap.String("src_client_id", srcClientId),
-		zap.Uint64("prev_height", MustGetHeight(srcUpdateHeader.GetHeight()).GetRevisionHeight()),
-		zap.Uint64("cur_height", srcUpdateHeader.GetHeight().GetRevisionHeight()),
-	)
+	//TODO: refactor to work for client_message
+	//cc.log.Info(
+	//	"Client updated",
+	//	zap.String("provider_chain_id", cc.PCfg.ChainID),
+	//	zap.String("src_client_id", srcClientId),
+	//	zap.Uint64("prev_height", MustGetHeight(srcUpdateHeader.GetHeight()).GetRevisionHeight()),
+	//	zap.Uint64("cur_height", srcUpdateHeader.GetHeight().GetRevisionHeight()),
+	//)
 
 	return clientState.TrustingPeriod, nil
 }
@@ -1736,27 +1742,10 @@ func parseEventsFromTxResponse(resp *sdk.TxResponse) []provider.RelayerEvent {
 }
 
 func (cc *CosmosProvider) buildMessages(ctx context.Context, msgs []provider.RelayerMessage) ([]byte, error) {
-	cliCtx := client.Context{}.WithClient(cc.RPCClient).
-		WithInterfaceRegistry(cc.Codec.InterfaceRegistry).
-		WithChainID(cc.Config.ChainID).
-		WithCodec(cc.Codec.Marshaler)
-
-	from, err := cc.GetKeyAddress()
-	if err != nil {
-		return nil, err
-	}
-
-	acc, err := cc.GetAccount(cliCtx, from)
-	if err != nil {
-		fmt.Printf("### error getting addess for %s, err: %v\n", from, err)
-		return nil, err
-	}
-
-	fmt.Printf("### ACCOUNT %v  address %v\n",acc, acc.GetAddress())
-
 	// Query account details
 	txf, err := cc.PrepareFactory(cc.TxFactory())
 	if err != nil {
+		fmt.Printf("### errror preparing factory\n")
 		return nil, err
 	}
 
@@ -1766,7 +1755,7 @@ func (cc *CosmosProvider) buildMessages(ctx context.Context, msgs []provider.Rel
 	// If users pass gas adjustment, then calculate gas
 	_, adjusted, err := cc.CalculateGas(ctx, txf, CosmosMsgs(msgs...)...)
 	if err != nil {
-		fmt.Printf("### errror calculating gas \n")
+		fmt.Printf("### errror calculating gas::: ERR: %s\n", err.Error())
 		return nil, err
 	}
 
@@ -1778,7 +1767,7 @@ func (cc *CosmosProvider) buildMessages(ctx context.Context, msgs []provider.Rel
 	if err := retry.Do(func() error {
 		txb, err = tx.BuildUnsignedTx(txf, CosmosMsgs(msgs...)...)
 		if err != nil {
-			fmt.Printf("### errror building unsigned tx\n")
+			fmt.Printf("### errror building unsigned tx \n")
 			return err
 		}
 		return nil
@@ -1812,6 +1801,7 @@ func (cc *CosmosProvider) buildMessages(ctx context.Context, msgs []provider.Rel
 		var err error
 		txBytes, err = cc.Codec.TxConfig.TxEncoder()(txb.GetTx())
 		if err != nil {
+			fmt.Printf("### errror decoding tx \n")
 			return err
 		}
 		return nil

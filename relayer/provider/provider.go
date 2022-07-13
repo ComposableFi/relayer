@@ -85,7 +85,7 @@ type ChainProvider interface {
 	KeyProvider
 
 	Init() error
-	CreateClient(clientState ibcexported.ClientState, dstHeader ibcexported.ClientMessage) (RelayerMessage, error)
+	CreateClient(clientState ibcexported.ClientState, dstHeader ibcexported.ClientMessage, signer string) (RelayerMessage, error)
 	SubmitMisbehavior( /*TODO TBD*/ ) (RelayerMessage, error)
 	UpdateClient(srcClientId string, dstHeader ibcexported.ClientMessage) (RelayerMessage, error)
 	ConnectionOpenInit(srcClientId, dstClientId string, dstHeader ibcexported.ClientMessage) ([]RelayerMessage, error)

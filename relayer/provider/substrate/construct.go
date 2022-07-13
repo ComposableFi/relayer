@@ -4,11 +4,14 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"github.com/ChainSafe/chaindb"
+	"github.com/ChainSafe/gossamer/lib/trie"
 	"sort"
 
 	"github.com/ComposableFi/go-merkle-trees/mmr"
 
 	"github.com/ComposableFi/go-merkle-trees/merkle"
+	hasher "github.com/ComposableFi/go-merkle-trees/hasher"
 	rpcclient "github.com/ComposableFi/go-substrate-rpc-client/v4"
 	rpcclientTypes "github.com/ComposableFi/go-substrate-rpc-client/v4/types"
 	"github.com/ComposableFi/go-substrate-rpc-client/v4/xxhash"
@@ -66,7 +69,7 @@ func clientState(
 		authorityLeaves = append(authorityLeaves, crypto.Keccak256(v))
 	}
 
-	authorityTree, err := merkle.NewTree(beefyClientTypes.Keccak256{}).FromLeaves(authorityLeaves)
+	authorityTree, err := merkle.NewTree(hasher.Keccak256Hasher{}).FromLeaves(authorityLeaves)
 	if err != nil {
 		return nil, err
 	}
@@ -76,7 +79,7 @@ func clientState(
 		nextAuthorityLeaves = append(nextAuthorityLeaves, crypto.Keccak256(v))
 	}
 
-	nextAuthorityTree, err := merkle.NewTree(beefyClientTypes.Keccak256{}).FromLeaves(nextAuthorityLeaves)
+	nextAuthorityTree, err := merkle.NewTree(hasher.Keccak256Hasher{}).FromLeaves(nextAuthorityLeaves)
 	if err != nil {
 		panic(err)
 	}
@@ -89,12 +92,12 @@ func clientState(
 		BeefyActivationBlock: 0,
 		Authority: &beefyClientTypes.BeefyAuthoritySet{
 			Id:            uint64(commitment.Commitment.ValidatorSetID),
-			Len:           uint32(len(authorities)),
+			Len:           uint64(len(authorities)),
 			AuthorityRoot: &authorityTreeRoot,
 		},
 		NextAuthoritySet: &beefyClientTypes.BeefyAuthoritySet{
 			Id:            uint64(commitment.Commitment.ValidatorSetID) + 1,
-			Len:           uint32(len(nextAuthorities)),
+			Len:           uint64(len(nextAuthorities)),
 			AuthorityRoot: &nextAuthorityTreeRoot,
 		},
 	}
@@ -306,7 +309,7 @@ func constructParachainHeaders(
 		var paraHeadsLeaves [][]byte
 		// index of our parachain header in the
 		// parachain heads merkle root
-		var index uint32
+		var index uint64
 
 		count := 0
 
@@ -327,16 +330,16 @@ func constructParachainHeaders(
 			paraHeadsLeaves = append(paraHeadsLeaves, crypto.Keccak256(leaf))
 			if paraId == PARA_ID {
 				// note index of paraId
-				index = uint32(count)
+				index = uint64(count)
 			}
 			count++
 		}
 
-		tree, err := merkle.NewTree(beefyClientTypes.Keccak256{}).FromLeaves(paraHeadsLeaves)
+		tree, err := merkle.NewTree(hasher.Keccak256Hasher{}).FromLeaves(paraHeadsLeaves)
 		if err != nil {
 			panic(err)
 		}
-		paraHeadsProof := tree.Proof([]uint32{index})
+		paraHeadsProof := tree.Proof([]uint64{index})
 		authorityRoot := bytes32(v.BeefyNextAuthoritySet.Root[:])
 		parentHash := bytes32(v.ParentNumberAndHash.Hash[:])
 
@@ -348,20 +351,49 @@ func constructParachainHeaders(
 				ParentHash:   &parentHash,
 				BeefyNextAuthoritySet: beefyClientTypes.BeefyAuthoritySet{
 					Id:            v.BeefyNextAuthoritySet.ID,
-					Len:           v.BeefyNextAuthoritySet.Len,
+					Len:           uint64(v.BeefyNextAuthoritySet.Len),
 					AuthorityRoot: &authorityRoot,
 				},
 			},
 			ParachainHeadsProof: paraHeadsProof.ProofHashes(),
 			ParaId:              PARA_ID,
 			HeadsLeafIndex:      index,
-			HeadsTotalCount:     uint32(len(paraHeadsLeaves)),
+			HeadsTotalCount:     uint64(len(paraHeadsLeaves)),
 		}
 
 		parachainHeaders = append(parachainHeaders, &header)
 	}
 
 	return parachainHeaders, nil
+}
+
+func extrinsics(conn *rpcclient.SubstrateAPI,
+	blockHash rpcclientTypes.Hash) error {
+	memdb, err := chaindb.NewBadgerDB(&chaindb.Config{
+		InMemory: true,
+		DataDir:  "./data",
+	})
+	if err != nil {
+		return err
+	}
+
+	block, err := conn.RPC.Chain.GetBlock(blockHash)
+	if err != nil {
+		return err
+	}
+
+	exts := block.Block.Extrinsics
+	trie := trie.NewEmptyTrie()
+	timestampExtrinsic := exts[0]
+	for i:=0; i<len(exts); i++ {
+		key := make([]byte, 4)
+		binary.LittleEndian.PutUint32(key, uint32(i))
+		trie.Put()
+	}
+
+
+
+	return nil
 }
 
 func mmrBatchProofs(
@@ -419,18 +451,16 @@ func mmrUpdateProof(
 	}
 
 	var signatures []*beefyClientTypes.CommitmentSignature
-	var
-
-	authorityIndeces []uint32
+	var authorityIndeces []uint64
 	// luckily for us, this is already sorted and maps to the right authority index in the authority root.
 	for i, v := range signedCommitment.Signatures {
 		if v.IsSome() {
 			_, sig := v.Unwrap()
 			signatures = append(signatures, &beefyClientTypes.CommitmentSignature{
 				Signature:      sig[:],
-				AuthorityIndex: uint32(i),
+				AuthorityIndex: uint64(i),
 			})
-			authorityIndeces = append(authorityIndeces, uint32(i))
+			authorityIndeces = append(authorityIndeces, uint64(i))
 		}
 	}
 
@@ -443,7 +473,7 @@ func mmrUpdateProof(
 	for _, v := range authorities {
 		authorityLeaves = append(authorityLeaves, crypto.Keccak256(v))
 	}
-	authorityTree, err := merkle.NewTree(beefyClientTypes.Keccak256{}).FromLeaves(authorityLeaves)
+	authorityTree, err := merkle.NewTree(hasher.Keccak256Hasher{}).FromLeaves(authorityLeaves)
 	if err != nil {
 		panic(err)
 	}
@@ -457,7 +487,7 @@ func mmrUpdateProof(
 			ParachainHeads: &ParachainHeads,
 			BeefyNextAuthoritySet: beefyClientTypes.BeefyAuthoritySet{
 				Id:            latestLeaf.BeefyNextAuthoritySet.ID,
-				Len:           latestLeaf.BeefyNextAuthoritySet.Len,
+				Len:           uint64(latestLeaf.BeefyNextAuthoritySet.Len),
 				AuthorityRoot: &BeefyNextAuthoritySetRoot,
 			},
 		},
@@ -465,7 +495,7 @@ func mmrUpdateProof(
 		MmrProof:     latestLeafMmrProof,
 		SignedCommitment: &beefyClientTypes.SignedCommitment{
 			Commitment: &beefyClientTypes.Commitment{
-				Payload:        []*beefyClientTypes.PayloadItem{
+				Payload: []*beefyClientTypes.PayloadItem{
 					{PayloadId: &payloadId, PayloadData: CommitmentPayload.Value},
 				},
 				BlockNumer:     uint32(signedCommitment.Commitment.BlockNumber),
@@ -547,9 +577,9 @@ func constructBeefyHeader(conn *rpcclient.SubstrateAPI, blockHash rpcclientTypes
 
 	return &beefyClientTypes.Header{
 		PreviouslyFinalized: pBlock,
-		ParachainHeaders: parachainHeads,
-		MmrProofs:        mmrBatchProofItems(batchProofs),
-		MmrSize:          mmr.LeafIndexToMMRSize(uint64(leafIndex)),
-		MmrUpdateProof:   updateProof,
+		ParachainHeaders:    parachainHeads,
+		MmrProofs:           mmrBatchProofItems(batchProofs),
+		MmrSize:             mmr.LeafIndexToMMRSize(uint64(leafIndex)),
+		MmrUpdateProof:      updateProof,
 	}, nil
 }

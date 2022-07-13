@@ -294,7 +294,7 @@ func (cc *CosmosProvider) NewClientState(dstUpdateHeader ibcexported.ClientMessa
 		UnbondingPeriod:              dstUbdPeriod,
 		MaxClockDrift:                time.Minute * 10,
 		FrozenHeight:                 clienttypes.ZeroHeight(),
-		LatestHeight:                 dstUpdateHeader.GetHeight().(clienttypes.Height),
+		LatestHeight:                 dstTmHeader.GetHeight().(clienttypes.Height),
 		ProofSpecs:                   commitmenttypes.GetSDKSpecs(),
 		UpgradePath:                  defaultUpgradePath,
 		AllowUpdateAfterExpiry:       allowUpdateAfterExpiry,
