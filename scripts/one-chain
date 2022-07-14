@@ -77,7 +77,7 @@ echo "step 2"
 $BINARY --home $CHAINDIR/$CHAINID keys add user $KEYRING --output json > $CHAINDIR/$CHAINID/key_seed.json 2>&1
 sleep 1
 echo "step 3"
-redirect $BINARY --home $CHAINDIR/$CHAINID add-genesis-account $($BINARY --home $CHAINDIR/$CHAINID keys $KEYRING show user -a) $coins 
+redirect $BINARY --home $CHAINDIR/$CHAINID add-genesis-account $($BINARY --home $CHAINDIR/$CHAINID keys $KEYRING show user -a) $coins
 sleep 1
 echo "step 4"
 redirect $BINARY --home $CHAINDIR/$CHAINID add-genesis-account $($BINARY --home $CHAINDIR/$CHAINID keys $KEYRING show validator -a) $coins 
@@ -86,7 +86,7 @@ echo "step 5"
 redirect $BINARY --home $CHAINDIR/$CHAINID gentx validator $delegate $KEYRING --chain-id $CHAINID
 sleep 1
 echo "step 6"
-redirect $BINARY --home $CHAINDIR/$CHAINID collect-gentxs 
+redirect $BINARY --home $CHAINDIR/$CHAINID collect-gentxs
 sleep 1
 echo "step 7"
 

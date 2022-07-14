@@ -36,10 +36,13 @@ require (
 )
 
 require (
+	github.com/ChainSafe/chaindb v0.1.5-0.20220322154826-c0d431995732
+	github.com/ChainSafe/gossamer v0.6.1-0.20220406182257-98400b30ca00
+)
+
+require (
 	filippo.io/edwards25519 v1.0.0-beta.2 // indirect
-	github.com/ChainSafe/chaindb v0.1.5-0.20220322154826-c0d431995732 // indirect
 	github.com/ChainSafe/go-schnorrkel v1.0.0 // indirect
-	github.com/ChainSafe/gossamer v0.6.1-0.20220406182257-98400b30ca00 // indirect
 	github.com/ChainSafe/log15 v1.0.0 // indirect
 	github.com/Microsoft/go-winio v0.5.1 // indirect
 	github.com/OneOfOne/xxhash v1.2.8 // indirect

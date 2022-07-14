@@ -68,7 +68,7 @@ func (sp *SubstrateProvider) QueryHeaderAtHeight(ctx context.Context, height int
 		return nil, err
 	}
 
-	return constructBeefyHeader(sp.LightClient, blockHash)
+	return sp.constructBeefyHeader(blockHash)
 }
 
 func (sp *SubstrateProvider) QueryBalance(ctx context.Context, keyName string) (sdk.Coins, error) {

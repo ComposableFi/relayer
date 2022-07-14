@@ -10,8 +10,8 @@ import (
 
 	"github.com/ComposableFi/go-merkle-trees/mmr"
 
-	"github.com/ComposableFi/go-merkle-trees/merkle"
 	hasher "github.com/ComposableFi/go-merkle-trees/hasher"
+	"github.com/ComposableFi/go-merkle-trees/merkle"
 	rpcclient "github.com/ComposableFi/go-substrate-rpc-client/v4"
 	rpcclientTypes "github.com/ComposableFi/go-substrate-rpc-client/v4/types"
 	"github.com/ComposableFi/go-substrate-rpc-client/v4/xxhash"
@@ -276,11 +276,11 @@ func parachainHeaderKeys(
 	return paraHeaderKeys, nil
 }
 
-func constructParachainHeaders(
-	conn *rpcclient.SubstrateAPI,
+func (sp *SubstrateProvider) constructParachainHeaders(
 	blockHash rpcclientTypes.Hash,
 	cs *beefyClientTypes.ClientState,
 ) ([]*beefyClientTypes.ParachainHeader, error) {
+	var conn = sp.LightClient
 	var finalizedBlocks = make(map[uint32]map[uint32][]byte)
 	var leafIndeces []uint64
 	finalizedBlocks, leafIndeces, err := getFinalizedBlocks(conn, cs, blockHash)
@@ -343,6 +343,16 @@ func constructParachainHeaders(
 		authorityRoot := bytes32(v.BeefyNextAuthoritySet.Root[:])
 		parentHash := bytes32(v.ParentNumberAndHash.Hash[:])
 
+		parachainHeaderDecoded, err := beefyClientTypes.DecodeParachainHeader(paraHeaders[PARA_ID])
+		if err != nil {
+			return nil, err
+		}
+
+		timestampExt, extProof, err := sp.constructExtrinsics(uint32(parachainHeaderDecoded.Number))
+		if err != nil {
+			return nil, err
+		}
+
 		header := beefyClientTypes.ParachainHeader{
 			ParachainHeader: paraHeaders[PARA_ID],
 			MmrLeafPartial: &beefyClientTypes.BeefyMmrLeafPartial{
@@ -359,6 +369,8 @@ func constructParachainHeaders(
 			ParaId:              PARA_ID,
 			HeadsLeafIndex:      index,
 			HeadsTotalCount:     uint64(len(paraHeadsLeaves)),
+			TimestampExtrinsic: timestampExt,
+			ExtrinsicProof: extProof,
 		}
 
 		parachainHeaders = append(parachainHeaders, &header)
@@ -367,33 +379,71 @@ func constructParachainHeaders(
 	return parachainHeaders, nil
 }
 
-func extrinsics(conn *rpcclient.SubstrateAPI,
-	blockHash rpcclientTypes.Hash) error {
-	memdb, err := chaindb.NewBadgerDB(&chaindb.Config{
-		InMemory: true,
-		DataDir:  "./data",
-	})
+func (sp *SubstrateProvider) constructExtrinsics(
+	blockNumber uint32,
+	) (timestampExtrinsic []byte, extrinsicProof [][]byte, err error) {
+	blockHash, err := sp.RPCClient.RPC.Chain.GetBlockHash(uint64(blockNumber))
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 
-	block, err := conn.RPC.Chain.GetBlock(blockHash)
+	block, err := sp.RPCClient.RPC.Chain.GetBlock(blockHash)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 
 	exts := block.Block.Extrinsics
-	trie := trie.NewEmptyTrie()
-	timestampExtrinsic := exts[0]
-	for i:=0; i<len(exts); i++ {
-		key := make([]byte, 4)
-		binary.LittleEndian.PutUint32(key, uint32(i))
-		trie.Put()
+	if len(exts) == 0 {
+		return nil, nil, nil
 	}
 
+	timestampExtrinsic, err = Encode(exts[0])
+	if err != nil {
+		return nil, nil, err
+	}
 
+	t := trie.NewEmptyTrie()
+	for i:=0; i<len(exts); i++ {
+		ext, err := Encode(exts[i])
+		if err != nil {
+			return nil, nil, err
+		}
 
-	return nil
+		key := rpcclientTypes.NewUCompactFromUInt(uint64(i))
+		encodedKey, err := Encode(key)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		t.Put(encodedKey, ext)
+	}
+
+	memdb, err := chaindb.NewBadgerDB(&chaindb.Config{
+		InMemory: true,
+		DataDir:  "./",
+	})
+
+	err = t.Store(memdb)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	rootHash, err := t.Hash()
+	if err != nil {
+		return nil,nil, err
+	}
+
+	timestampKey := rpcclientTypes.NewUCompactFromUInt(uint64(0))
+	encodedTPKey, err := Encode(timestampKey)
+	if err != nil {
+		return nil, nil, err
+	}
+	extrinsicProof, err = trie.GenerateProof(rootHash.ToBytes(), [][]byte{encodedTPKey}, memdb)
+	if err != nil {
+		return nil,nil, err
+	}
+
+	return
 }
 
 func mmrBatchProofs(
@@ -531,7 +581,8 @@ func previouslyFinalizedBlock(conn *rpcclient.SubstrateAPI, blockNumber uint64) 
 	}
 }
 
-func constructBeefyHeader(conn *rpcclient.SubstrateAPI, blockHash rpcclientTypes.Hash) (*beefyClientTypes.Header, error) {
+func (sp *SubstrateProvider) constructBeefyHeader(blockHash rpcclientTypes.Hash) (*beefyClientTypes.Header, error) {
+	var conn = sp.LightClient
 	// assuming blockHash is always the latest beefy block hash
 	latestFinalizedBlock, err := conn.RPC.Chain.GetBlock(blockHash)
 	if err != nil {
@@ -558,7 +609,7 @@ func constructBeefyHeader(conn *rpcclient.SubstrateAPI, blockHash rpcclientTypes
 		return nil, err
 	}
 
-	parachainHeads, err := constructParachainHeaders(conn, blockHash, cs)
+	parachainHeads, err := sp.constructParachainHeaders(blockHash, cs)
 	if err != nil {
 		return nil, err
 	}

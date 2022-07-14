@@ -61,7 +61,6 @@ func (sp *SubstrateProvider) CreateClient(clientState ibcexported.ClientState, d
 		return nil, err
 	}
 
-	fmt.Printf("### typing to dst header \n")
 	beefyHeader, ok := dstHeader.(*beefyclient.Header)
 	if !ok {
 		return nil, fmt.Errorf("got data of type %T but wanted beefyclient.Header \n", dstHeader)
@@ -71,25 +70,21 @@ func (sp *SubstrateProvider) CreateClient(clientState ibcexported.ClientState, d
 	//	return nil, err
 	//}
 
-	fmt.Printf("### packing client state\n")
 	anyClientState, err := clienttypes.PackClientState(clientState)
 	if err != nil {
 		return nil, err
 	}
 
-	fmt.Printf("### consensus state \n")
 	anyConsensusState, err := clienttypes.PackConsensusState(beefyHeader.ConsensusState())
 	if err != nil {
 		return nil, err
 	}
 
-	fmt.Printf("### putting data ins MSGCREATECLIENT \n")
 	msg := &clienttypes.MsgCreateClient{
 		ClientState:    anyClientState,
 		ConsensusState: anyConsensusState,
 		Signer:         signer,
 	}
-	fmt.Printf("### returning new cosmos message \n")
 	//return NewSubstrateRelayerMessage(msg), nil
 	return cosmos.NewCosmosMessage(msg), nil
 }
