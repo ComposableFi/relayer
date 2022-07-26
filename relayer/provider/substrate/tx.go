@@ -53,7 +53,7 @@ func (sp *SubstrateProvider) Init() error {
 
 func (sp *SubstrateProvider) CreateClient(clientState ibcexported.ClientState, dstHeader ibcexported.ClientMessage, signer string) (provider.RelayerMessage, error) {
 	var (
-		// acc string
+		acc string
 		err error
 	)
 	// TODO: fix head decoding error in validate basic
@@ -66,9 +66,14 @@ func (sp *SubstrateProvider) CreateClient(clientState ibcexported.ClientState, d
 		return nil, fmt.Errorf("got data of type %T but wanted beefyclient.Header \n", dstHeader)
 	}
 
-	//if acc, err = sp.Address(); err != nil {
-	//	return nil, err
-	//}
+	acc = signer
+	if acc == "" {
+		acc, err = sp.Address()
+		if  err != nil {
+			return nil, err
+		}
+	}
+
 
 	anyClientState, err := clienttypes.PackClientState(clientState)
 	if err != nil {
@@ -83,9 +88,10 @@ func (sp *SubstrateProvider) CreateClient(clientState ibcexported.ClientState, d
 	msg := &clienttypes.MsgCreateClient{
 		ClientState:    anyClientState,
 		ConsensusState: anyConsensusState,
-		Signer:         signer,
+		Signer:         acc,
 	}
 	//return NewSubstrateRelayerMessage(msg), nil
+	// TODO: return appropriate message type for target chain or create message translator
 	return cosmos.NewCosmosMessage(msg), nil
 }
 
@@ -826,7 +832,7 @@ func (sp *SubstrateProvider) SendMessages(ctx context.Context, msgs []provider.R
 			break
 		}
 
-		fmt.Printf("waiting for the extrinsic to be included/finalized")
+		fmt.Printf("waiting for the extrinsic to be included/finalized \n")
 	}
 
 	fmt.Printf("block hash is %v \n", status.AsFinalized.Hex())
@@ -835,7 +841,7 @@ func (sp *SubstrateProvider) SendMessages(ctx context.Context, msgs []provider.R
 	if err != nil {
 		return nil, false, err
 	}
-	 fmt.Printf("CLIENTS %v \n", clients)
+
 	rlyRes := &provider.RelayerTxResponse{
 		TxHash: status.AsUsurped.Hex(),
 		Events: []provider.RelayerEvent{

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	beefyClientTypes "github.com/cosmos/ibc-go/v3/modules/light-clients/11-beefy/types"
+	// tmclient "github.com/cosmos/ibc-go/v3/modules/light-clients/07-tendermint/types"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	transfertypes "github.com/cosmos/ibc-go/v3/modules/apps/transfer/types"
@@ -16,7 +17,6 @@ import (
 	committypes "github.com/cosmos/ibc-go/v3/modules/core/23-commitment/types"
 	ibcexported "github.com/cosmos/ibc-go/v3/modules/core/exported"
 	"github.com/cosmos/relayer/v2/relayer/provider"
-
 	"golang.org/x/sync/errgroup"
 )
 
@@ -104,7 +104,22 @@ func (sp *SubstrateProvider) QueryUnbondingPeriod(ctx context.Context) (time.Dur
 }
 
 func (sp *SubstrateProvider) QueryClientState(ctx context.Context, height int64, clientid string) (ibcexported.ClientState, error) {
-	res, err := sp.QueryClientStateResponse(ctx, height, clientid)
+	h := height
+	if height <= 0 {
+		head, err := sp.RPCClient.RPC.Chain.GetFinalizedHead()
+		if err != nil {
+			return nil, err
+		}
+
+		block, err := sp.RPCClient.RPC.Chain.GetBlock(head)
+		if err != nil {
+			return nil, err
+		}
+
+		h = int64(block.Block.Header.Number)
+	}
+
+	res, err := sp.QueryClientStateResponse(ctx, h, clientid)
 	if err != nil {
 		return nil, err
 	}
@@ -115,22 +130,6 @@ func (sp *SubstrateProvider) QueryClientState(ctx context.Context, height int64,
 	}
 
 	return clientStateExported, nil
-	//blockHash, err := sp.RPCClient.RPC.Chain.GetBlockHash(uint64(height))
-	//if err != nil {
-	//	return nil, err
-	//}
-	//
-	//commitment, err := signedCommitment(sp.RPCClient, blockHash)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//
-	//cs, err := clientState(sp.RPCClient, commitment)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//
-	//return cs, nil
 }
 
 func (sp *SubstrateProvider) QueryClientStateResponse(ctx context.Context, height int64, srcClientId string) (*clienttypes.QueryClientStateResponse, error) {
@@ -138,8 +137,7 @@ func (sp *SubstrateProvider) QueryClientStateResponse(ctx context.Context, heigh
 	if err != nil {
 		return nil, err
 	}
-
-	return res, nil
+	return &res, nil
 }
 
 func (sp *SubstrateProvider) QueryClientConsensusState(ctx context.Context, chainHeight int64, clientid string, clientHeight ibcexported.Height) (*clienttypes.QueryConsensusStateResponse, error) {
@@ -183,7 +181,7 @@ func (sp *SubstrateProvider) QueryConsensusState(ctx context.Context, height int
 
 // QueryClients queries all the clients!
 // TODO add pagination support
-func (sp *SubstrateProvider) QueryClients(ctx context.Context) (clienttypes.IdentifiedClientStates, error) {
+func (sp *SubstrateProvider) QueryClients(_ context.Context) (clienttypes.IdentifiedClientStates, error) {
 	res, err := sp.RPCClient.RPC.IBC.QueryClients()
 	if err != nil {
 		return nil, err

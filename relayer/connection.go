@@ -24,6 +24,7 @@ func (c *Chain) CreateOpenConnections(
 	if err = ValidateClientPaths(c, dst); err != nil {
 		return modified, err
 	}
+	fmt.Printf("### validated client paths \n")
 
 	ticker := time.NewTicker(timeout)
 	defer ticker.Stop()
@@ -363,6 +364,7 @@ func InitializeConnection(ctx context.Context, src, dst *Chain) (success, modifi
 				return false, false, err
 			}
 
+			fmt.Printf("### attempting to send connection messages \n")
 			res, success, err = src.ChainProvider.SendMessages(ctx, msgs)
 			if err != nil {
 				src.LogFailedTx(res, err, msgs)
@@ -370,6 +372,7 @@ func InitializeConnection(ctx context.Context, src, dst *Chain) (success, modifi
 			if !success {
 				return false, false, err
 			}
+			fmt.Printf("### sent connection messages\n")
 
 			// update connection identifier in PathEnd
 			// use index 1, connection open init is the second message in the transaction

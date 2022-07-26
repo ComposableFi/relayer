@@ -162,18 +162,6 @@ func signedCommitment(conn *rpcclient.SubstrateAPI, blockHash rpcclientTypes.Has
 		return rpcclientTypes.SignedCommitment{}, err
 	}
 
-	//for _, v := range signedBlock.Justifications {
-	//	// not every relay chain block has a beefy justification
-	//	if bytes.Equal(v.ConsensusEngineID[:], []byte("BEEF")) {
-	//		compactCommitment := &rpcclientTypes.CompactSignedCommitment{}
-	//
-	//		err = rpcclientTypes.DecodeFromBytes(v.EncodedJustification, compactCommitment)
-	//		if err != nil {
-	//			return rpcclientTypes.SignedCommitment{}, err
-	//		}
-	//		return compactCommitment.Unpack(), nil
-	//	}
-	//}
 	for _, v := range signedBlock.Justifications {
 		if bytes.Equal(v.ConsensusEngineID[:], []byte("BEEF")) {
 			versionedFinalityProof := &rpcclientTypes.VersionedFinalityProof{}
@@ -356,7 +344,7 @@ func (sp *SubstrateProvider) constructParachainHeaders(
 		header := beefyClientTypes.ParachainHeader{
 			ParachainHeader: paraHeaders[PARA_ID],
 			MmrLeafPartial: &beefyClientTypes.BeefyMmrLeafPartial{
-				Version:      v.Version,
+				Version:      beefyClientTypes.U8(v.Version),
 				ParentNumber: v.ParentNumberAndHash.ParentNumber,
 				ParentHash:   &parentHash,
 				BeefyNextAuthoritySet: beefyClientTypes.BeefyAuthoritySet{
@@ -531,7 +519,7 @@ func mmrUpdateProof(
 	var payloadId beefyClientTypes.SizedByte2 = CommitmentPayload.ID
 	return &beefyClientTypes.MmrUpdateProof{
 		MmrLeaf: &beefyClientTypes.BeefyMmrLeaf{
-			Version:        latestLeaf.Version,
+			Version:        beefyClientTypes.U8(latestLeaf.Version),
 			ParentNumber:   latestLeaf.ParentNumberAndHash.ParentNumber,
 			ParentHash:     &parentHash,
 			ParachainHeads: &ParachainHeads,

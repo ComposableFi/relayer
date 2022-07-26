@@ -67,15 +67,16 @@ func (c *Chain) CreateClients(ctx context.Context, dst *Chain, allowUpdateAfterE
 		return nil
 	})
 
-	//eg.Go(func() error {
-	//	var err error
-	//	// Create client on dst for src if the client id is unspecified
-	//	modifiedDst, err = CreateClient(egCtx, dst, c, dstUpdateHeader, srcUpdateHeader, allowUpdateAfterExpiry, allowUpdateAfterMisbehaviour, override)
-	//	if err != nil {
-	//		return fmt.Errorf("failed to create client on dst chain{%s}: %w", dst.ChainID(), err)
-	//	}
-	//	return nil
-	//})
+	eg.Go(func() error {
+		var err error
+		// Create client on dst for src if the client id is unspecified
+		modifiedDst, err = CreateClient(egCtx, dst, c, dstUpdateHeader, srcUpdateHeader, allowUpdateAfterExpiry, allowUpdateAfterMisbehaviour, override)
+		if err != nil {
+			return fmt.Errorf("failed to create client on dst chain{%s}: %w", dst.ChainID(), err)
+		}
+		fmt.Printf("### successfully created tendermint client on substrate chain \n")
+		return nil
+	})
 
 	if err := eg.Wait(); err != nil {
 		// If one completed successfully and the other didn't, we can still report modified.
@@ -96,23 +97,18 @@ func (c *Chain) CreateClients(ctx context.Context, dst *Chain, allowUpdateAfterE
 func ClientHeight(msg interface{}) ibcexported.Height {
 	switch t := msg.(type) {
 	case *tmclient.Header:
-		fmt.Printf("### this is a tendermint height \n")
 		return t.GetHeight()
 	case *beefyclient.Header:
-		fmt.Printf("### this is a beefy header\n")
 		return t.GetHeight()
 	default:
-		fmt.Printf("### no match found!!!")
 		return nil
 	}
 }
 
 func CreateClient(ctx context.Context, src, dst *Chain, srcUpdateHeader, dstUpdateHeader ibcexported.ClientMessage, allowUpdateAfterExpiry, allowUpdateAfterMisbehaviour, override bool) (bool, error) {
-	fmt.Printf("### starting create state client response \n")
 	// If a client ID was specified in the path, ensure it exists.
 	if src.PathEnd.ClientID != "" {
 		// TODO: check client is not expired
-		fmt.Printf("### Querying client state response \n")
 		_, err := src.ChainProvider.QueryClientStateResponse(ctx, int64(ClientHeight(srcUpdateHeader).GetRevisionHeight()), src.ClientID())
 		if err != nil {
 			return false, fmt.Errorf("please ensure provided on-chain client (%s) exists on the chain (%s): %v",
@@ -139,13 +135,13 @@ func CreateClient(ctx context.Context, src, dst *Chain, srcUpdateHeader, dstUpda
 		return false, err
 	}
 
-	//src.log.Debug(
-	//	"Creating client",
-	//	zap.String("src_chain_id", src.ChainID()),
-	//	zap.String("dst_chain_id", dst.ChainID()),
-	//	zap.Uint64("dst_header_height", dstUpdateHeader.GetHeight().GetRevisionHeight()),
-	//	zap.Duration("trust_period", tp),
-	//)
+	src.log.Debug(
+		"Creating client",
+		zap.String("src_chain_id", src.ChainID()),
+		zap.String("dst_chain_id", dst.ChainID()),
+		zap.Uint64("dst_header_height", ClientHeight(dstUpdateHeader).GetRevisionHeight()),
+		zap.Duration("trust_period", tp),
+	)
 
 	// Query the unbonding period for dst and retry if the query fails
 	var ubdPeriod time.Duration
@@ -214,7 +210,6 @@ func CreateClient(ctx context.Context, src, dst *Chain, srcUpdateHeader, dstUpda
 			src.LogFailedTx(res, err, msgs)
 			return fmt.Errorf("failed to send messages on chain{%s}: %w", src.ChainID(), err)
 		}
-		fmt.Printf("### done sending messages \n")
 		if !success {
 			src.LogFailedTx(res, nil, msgs)
 			return fmt.Errorf("tx failed on chain{%s}: %s", src.ChainID(), res.Data)

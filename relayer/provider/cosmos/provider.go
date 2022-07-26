@@ -756,7 +756,6 @@ func (cc *CosmosProvider) InjectTrustedFields(ctx context.Context, header ibcexp
 
 	// inject TrustedHeight as latest height stored on dst client
 	h.TrustedHeight = cs.GetLatestHeight().(clienttypes.Height)
-
 	// NOTE: We need to get validators from the source chain at height: trustedHeight+1
 	// since the last trusted validators for a header at height h is the NextValidators
 	// at h+1 committed to in header h by NextValidatorsHash
@@ -1745,7 +1744,6 @@ func (cc *CosmosProvider) buildMessages(ctx context.Context, msgs []provider.Rel
 	// Query account details
 	txf, err := cc.PrepareFactory(cc.TxFactory())
 	if err != nil {
-		fmt.Printf("### errror preparing factory\n")
 		return nil, err
 	}
 
@@ -1755,7 +1753,6 @@ func (cc *CosmosProvider) buildMessages(ctx context.Context, msgs []provider.Rel
 	// If users pass gas adjustment, then calculate gas
 	_, adjusted, err := cc.CalculateGas(ctx, txf, CosmosMsgs(msgs...)...)
 	if err != nil {
-		fmt.Printf("### errror calculating gas::: ERR: %s\n", err.Error())
 		return nil, err
 	}
 
@@ -1767,7 +1764,6 @@ func (cc *CosmosProvider) buildMessages(ctx context.Context, msgs []provider.Rel
 	if err := retry.Do(func() error {
 		txb, err = tx.BuildUnsignedTx(txf, CosmosMsgs(msgs...)...)
 		if err != nil {
-			fmt.Printf("### errror building unsigned tx \n")
 			return err
 		}
 		return nil
@@ -1785,7 +1781,6 @@ func (cc *CosmosProvider) buildMessages(ctx context.Context, msgs []provider.Rel
 
 	if err := retry.Do(func() error {
 		if err := tx.Sign(txf, cc.PCfg.Key, txb, false); err != nil {
-			fmt.Printf("### errror signing tx \n")
 			return err
 		}
 		return nil
@@ -1801,7 +1796,6 @@ func (cc *CosmosProvider) buildMessages(ctx context.Context, msgs []provider.Rel
 		var err error
 		txBytes, err = cc.Codec.TxConfig.TxEncoder()(txb.GetTx())
 		if err != nil {
-			fmt.Printf("### errror decoding tx \n")
 			return err
 		}
 		return nil
