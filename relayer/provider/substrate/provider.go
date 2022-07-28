@@ -37,6 +37,7 @@ type SubstrateProvider struct {
 	LatestBeefyHeight int64
 	Keybase     keystore.Keyring
 	Input       io.Reader
+	BlockHistory map[uint64]uint64
 }
 
 type SubstrateRelayerMessage struct {

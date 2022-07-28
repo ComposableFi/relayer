@@ -48,7 +48,78 @@ func (sp *SubstrateProvider) Init() error {
 
 	sp.RPCClient = client
 	sp.LightClient = lightClient
+	sp.BlockHistory = make(map[uint64]uint64)
+	sp.fetchNewBlocks()
+	fmt.Printf("### done fetching new blocks ========> \n")
 	return nil
+}
+
+func (sp *SubstrateProvider) fetchNewBlocks() {
+	fmt.Printf("### fetching new blocks ========> \n")
+	ch := make(chan interface{})
+	sub, err := sp.LightClient.Client.Subscribe(
+		context.Background(),
+		"beefy",
+		"subscribeJustifications",
+		"unsubscribeJustifications",
+		"justifications",
+		ch,
+	)
+	if err != nil {
+		fmt.Printf("error subscribing to justifications")
+		return
+	}
+
+
+	var beefyClientState *beefyclient.ClientState
+	defer sub.Unsubscribe()
+	for {
+		fmt.Printf("### waiting for blocks ========> \n")
+		msg := <-ch
+		compactCommitment := rpcClientTypes.CompactSignedCommitment{}
+		err = rpcClientTypes.DecodeFromHexString(msg.(string), &compactCommitment)
+		if err != nil {
+			fmt.Printf("error decoding: %v \n", err.Error())
+			return
+		}
+
+		commitment := compactCommitment.Unpack()
+		if beefyClientState == nil {
+			beefyClientState, err = clientState(sp.LightClient, commitment)
+			if err != nil {
+				fmt.Printf("error creating client state: %v \n", err.Error())
+				return
+			}
+			continue
+		}
+
+		blockHash, err :=  sp.LightClient.RPC.Chain.GetBlockHash(uint64(commitment.Commitment.BlockNumber))
+		if err != nil {
+			fmt.Printf("error getting block hash: %v \n", err.Error())
+			return
+		}
+
+		parachainHeads, err := sp.constructParachainHeaders(blockHash, beefyClientState)
+		if err != nil {
+			fmt.Printf("construct parachain headers error: %v \n", err.Error())
+			return
+		}
+
+		for _, h := range parachainHeads {
+			header, err := beefyclient.DecodeParachainHeader(h.ParachainHeader)
+			if err != nil {
+				panic(fmt.Errorf("failed to decode parachain header"))
+			}
+			sp.BlockHistory[uint64(header.Number)] = uint64(commitment.Commitment.BlockNumber)
+		}
+
+		fmt.Printf("## updating block history %+v \n", sp.BlockHistory)
+		beefyClientState, err = clientState(sp.LightClient, commitment)
+		if err != nil {
+			fmt.Printf("error constructing client state: %v \n", err.Error())
+			return
+		}
+	}
 }
 
 func (sp *SubstrateProvider) CreateClient(clientState ibcexported.ClientState, dstHeader ibcexported.ClientMessage, signer string) (provider.RelayerMessage, error) {
