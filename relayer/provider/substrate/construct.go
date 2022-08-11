@@ -12,7 +12,7 @@ import (
 	rpcclient "github.com/ComposableFi/go-substrate-rpc-client/v4"
 	rpcclientTypes "github.com/ComposableFi/go-substrate-rpc-client/v4/types"
 	"github.com/ComposableFi/go-substrate-rpc-client/v4/xxhash"
-	beefyClientTypes "github.com/cosmos/ibc-go/v3/modules/light-clients/11-beefy/types"
+	beefyClientTypes "github.com/cosmos/ibc-go/v5/modules/light-clients/11-beefy/types"
 	"github.com/ethereum/go-ethereum/crypto"
 )
 

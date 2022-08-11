@@ -4,20 +4,20 @@ import (
 	"context"
 	"fmt"
 
-	transfertypes "github.com/cosmos/ibc-go/v3/modules/apps/transfer/types"
-	conntypes "github.com/cosmos/ibc-go/v3/modules/core/03-connection/types"
-	commitmenttypes "github.com/cosmos/ibc-go/v3/modules/core/23-commitment/types"
+	transfertypes "github.com/cosmos/ibc-go/v5/modules/apps/transfer/types"
+	conntypes "github.com/cosmos/ibc-go/v5/modules/core/03-connection/types"
+	commitmenttypes "github.com/cosmos/ibc-go/v5/modules/core/23-commitment/types"
 
 	"time"
 
-	beefyclient "github.com/cosmos/ibc-go/v3/modules/light-clients/11-beefy/types"
+	beefyclient "github.com/cosmos/ibc-go/v5/modules/light-clients/11-beefy/types"
 
 	rpcClient "github.com/ComposableFi/go-substrate-rpc-client/v4"
 	rpcClientTypes "github.com/ComposableFi/go-substrate-rpc-client/v4/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	clienttypes "github.com/cosmos/ibc-go/v3/modules/core/02-client/types"
-	chantypes "github.com/cosmos/ibc-go/v3/modules/core/04-channel/types"
-	ibcexported "github.com/cosmos/ibc-go/v3/modules/core/exported"
+	clienttypes "github.com/cosmos/ibc-go/v5/modules/core/02-client/types"
+	chantypes "github.com/cosmos/ibc-go/v5/modules/core/04-channel/types"
+	ibcexported "github.com/cosmos/ibc-go/v5/modules/core/exported"
 	"github.com/cosmos/relayer/v2/relayer/provider"
 	"github.com/cosmos/relayer/v2/relayer/provider/substrate/keystore"
 )
