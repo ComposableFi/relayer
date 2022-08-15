@@ -8,6 +8,7 @@ import (
 
 	rpcclienttypes "github.com/ComposableFi/go-substrate-rpc-client/v4/types"
 	"github.com/avast/retry-go/v4"
+	clienttypes "github.com/cosmos/ibc-go/v5/modules/core/02-client/types"
 	conntypes "github.com/cosmos/ibc-go/v5/modules/core/03-connection/types"
 	chantypes "github.com/cosmos/ibc-go/v5/modules/core/04-channel/types"
 	"github.com/cosmos/relayer/v2/relayer/processor"
@@ -70,7 +71,16 @@ const (
 // latestClientState is a map of clientID to the latest clientInfo for that client.
 type latestClientState map[string]provider.ClientState
 
-func (l latestClientState) update(clientInfo clientInfo) {}
+func (l latestClientState) update(clientInfo clientInfo) {
+	existingClientInfo, ok := l[clientInfo.clientID]
+	if ok && clientInfo.consensusHeight.LT(existingClientInfo.ConsensusHeight) {
+		// height is less than latest, so no-op
+		return
+	}
+
+	// update latest if no existing state or provided consensus height is newer
+	l[clientInfo.clientID] = clientInfo.ClientState()
+}
 
 // Provider returns the ChainProvider, which provides the methods for querying, assembling IBC messages, and sending transactions.
 func (scp *SubstrateChainProcessor) Provider() provider.ChainProvider {
@@ -87,15 +97,37 @@ func (scp *SubstrateChainProcessor) SetPathProcessors(pathProcessors processor.P
 // It will delay by latestHeightQueryRetryDelay between attempts, up to latestHeightQueryRetries.
 func (scp *SubstrateChainProcessor) latestHeightWithRetry(ctx context.Context) (latestHeight int64, err error) {
 	return latestHeight, retry.Do(func() error {
-		return nil
+		latestHeightQueryCtx, cancelLatestHeightQueryCtx := context.WithTimeout(ctx, queryTimeout)
+		defer cancelLatestHeightQueryCtx()
+		var err error
+		latestHeight, err = scp.chainProvider.QueryLatestHeight(latestHeightQueryCtx)
+		return err
 	}, retry.Context(ctx), retry.Attempts(latestHeightQueryRetries), retry.Delay(latestHeightQueryRetryDelay), retry.LastErrorOnly(true), retry.OnRetry(func(n uint, err error) {
+		scp.log.Info(
+			"Failed to query latest height",
+			zap.Uint("attempt", n+1),
+			zap.Uint("max_attempts", latestHeightQueryRetries),
+			zap.Error(err),
+		)
 	}))
 }
 
 // clientState will return the most recent client state if client messages
 // have already been observed for the clientID, otherwise it will query for it.
 func (scp *SubstrateChainProcessor) clientState(ctx context.Context, clientID string) (provider.ClientState, error) {
-	return provider.ClientState{}, nil
+	if state, ok := scp.latestClientState[clientID]; ok {
+		return state, nil
+	}
+	cs, err := scp.chainProvider.QueryClientState(ctx, int64(scp.latestBlock.Height), clientID)
+	if err != nil {
+		return provider.ClientState{}, err
+	}
+	clientState := provider.ClientState{
+		ClientID:        clientID,
+		ConsensusHeight: cs.GetLatestHeight().(clienttypes.Height),
+	}
+	scp.latestClientState[clientID] = clientState
+	return clientState, nil
 }
 
 // queryCyclePersistence hold the variables that should be retained across queryCycles.
