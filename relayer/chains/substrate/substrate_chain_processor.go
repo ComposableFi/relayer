@@ -3,10 +3,13 @@ package substrate
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	rpcclienttypes "github.com/ComposableFi/go-substrate-rpc-client/v4/types"
 	"github.com/avast/retry-go/v4"
+	conntypes "github.com/cosmos/ibc-go/v5/modules/core/03-connection/types"
+	chantypes "github.com/cosmos/ibc-go/v5/modules/core/04-channel/types"
 	"github.com/cosmos/relayer/v2/relayer/processor"
 	"github.com/cosmos/relayer/v2/relayer/provider"
 	"go.uber.org/zap"
@@ -168,11 +171,49 @@ func (scp *SubstrateChainProcessor) Run(ctx context.Context, initialBlockHistory
 
 // initializeConnectionState will bootstrap the connectionStateCache with the open connection state.
 func (scp *SubstrateChainProcessor) initializeConnectionState(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, queryTimeout)
+	defer cancel()
+	connections, err := scp.chainProvider.QueryConnections(ctx)
+	if err != nil {
+		return fmt.Errorf("error querying connections: %w", err)
+	}
+	for _, c := range connections {
+		scp.connectionClients[c.Id] = c.ClientId
+		scp.connectionStateCache[processor.ConnectionKey{
+			ConnectionID:         c.Id,
+			ClientID:             c.ClientId,
+			CounterpartyConnID:   c.Counterparty.ConnectionId,
+			CounterpartyClientID: c.Counterparty.ClientId,
+		}] = c.State == conntypes.OPEN
+	}
 	return nil
 }
 
 // initializeChannelState will bootstrap the channelStateCache with the open channel state.
 func (scp *SubstrateChainProcessor) initializeChannelState(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, queryTimeout)
+	defer cancel()
+	channels, err := scp.chainProvider.QueryChannels(ctx)
+	if err != nil {
+		return fmt.Errorf("error querying channels: %w", err)
+	}
+	for _, ch := range channels {
+		if len(ch.ConnectionHops) != 1 {
+			scp.log.Error("Found channel using multiple connection hops. Not currently supported, ignoring.",
+				zap.String("channel_id", ch.ChannelId),
+				zap.String("port_id", ch.PortId),
+				zap.Strings("connection_hops", ch.ConnectionHops),
+			)
+			continue
+		}
+		scp.channelConnections[ch.ChannelId] = ch.ConnectionHops[0]
+		scp.channelStateCache[processor.ChannelKey{
+			ChannelID:             ch.ChannelId,
+			PortID:                ch.PortId,
+			CounterpartyChannelID: ch.Counterparty.ChannelId,
+			CounterpartyPortID:    ch.Counterparty.PortId,
+		}] = ch.State == chantypes.OPEN
+	}
 	return nil
 }
 
@@ -228,7 +269,9 @@ func (scp *SubstrateChainProcessor) queryCycle(ctx context.Context, persistence 
 		heightUint64 := uint64(i)
 
 		eg.Go(func() (err error) {
-			ibcEvents, err = scp.chainProvider.RPCClient.RPC.IBC.QueryIbcEvents([]rpcclienttypes.BlockNumberOrHash{{Number: uint32(heightUint64)}})
+			queryCtx, cancelQueryCtx := context.WithTimeout(ctx, queryTimeout)
+			defer cancelQueryCtx()
+			ibcEvents, err = scp.chainProvider.RPCClient.RPC.IBC.QueryIbcEvents(queryCtx, []rpcclienttypes.BlockNumberOrHash{{Number: uint32(heightUint64)}})
 			return err
 		})
 		eg.Go(func() (err error) {
